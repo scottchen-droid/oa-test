@@ -1,0 +1,1203 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════
+// 組織架構 — 地區 / 公司 / 部門 / 事業部 / 項目 / 職位 / 職級
+// ═══════════════════════════════════════════════
+
+/// 地區（大區域，如台灣、香港、新加坡），是公司的上層分組
+model Region {
+  id           String   @id @default(uuid()) @db.Uuid   // 主鍵 UUID
+  code         String   @unique @db.VarChar(50)          // 地區代碼，全域唯一，如 TW / HK / SG
+  name         String   @db.VarChar(100)                 // 地區名稱，如 台灣
+  timezone     String?  @db.VarChar(100)                 // 時區，如 Asia/Taipei
+  currencyCode String?  @db.VarChar(10)                  // 預設貨幣代碼，如 TWD
+  isActive     Boolean  @default(true)                   // 是否啟用（軟刪除）
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  companies             Company[]
+  approvalTemplates     ApprovalTemplate[]
+  purchaseAllocations   PurchaseRequestAllocation[]
+  reimbursementRequests ReimbursementRequest[]
+  leavePolicies         LeavePolicies[]
+  publicHolidays        PublicHoliday[]
+
+  @@map("regions")
+}
+
+/// 公司（法律實體），隸屬於某個地區
+model Company {
+  id           String   @id @default(uuid()) @db.Uuid  // 主鍵 UUID
+  regionId     String   @db.Uuid                        // 所屬地區 ID → Region
+  code         String   @unique @db.VarChar(50)         // 公司代碼，全域唯一，如 TW-HQ
+  name         String   @db.VarChar(150)                // 公司名稱
+  legalName    String?  @db.VarChar(150)                // 法定登記名稱
+  taxId        String?  @db.VarChar(100)                // 統一編號 / 稅務識別碼
+  currencyCode String?  @db.VarChar(10)                 // 公司本位幣，覆蓋地區預設值
+  isActive     Boolean  @default(true)                  // 是否啟用（軟刪除）
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  region                Region                @relation(fields: [regionId], references: [id])
+  departments           Department[]
+  positions             Position[]
+  userOrgAssignments    UserOrgAssignment[]
+  purchaseRequests      PurchaseRequest[]
+  purchaseAllocations   PurchaseRequestAllocation[]
+  reimbursementRequests ReimbursementRequest[]
+  approvalTemplates     ApprovalTemplate[]
+  leavePolicies         LeavePolicies[]
+  publicHolidays        PublicHoliday[]
+
+  @@map("companies")
+}
+
+/// 部門，隸屬於公司，支援無限層級父子樹狀結構
+model Department {
+  id                 String   @id @default(uuid()) @db.Uuid  // 主鍵 UUID
+  companyId          String   @db.Uuid                        // 所屬公司 ID → Company
+  parentDepartmentId String?  @db.Uuid                        // 父部門 ID（null 表示頂層部門）
+  code               String   @db.VarChar(50)                 // 部門代碼，在同一公司內唯一
+  name               String   @db.VarChar(150)                // 部門名稱
+  isActive           Boolean  @default(true)                  // 是否啟用（軟刪除）
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  company             Company     @relation(fields: [companyId], references: [id])
+  parent              Department? @relation("DepartmentChildren", fields: [parentDepartmentId], references: [id])
+  children            Department[] @relation("DepartmentChildren")
+  userOrgAssignments  UserOrgAssignment[]
+  purchaseRequests    PurchaseRequest[]
+  purchaseAllocations PurchaseRequestAllocation[]
+  approvalTemplates   ApprovalTemplate[]
+
+  @@unique([companyId, code])  // 同一公司內部門代碼不重複
+  @@map("departments")
+}
+
+/// 事業部（跨公司的業務維度），例如 IT事業部、財務事業部
+model BusinessUnit {
+  id          String   @id @default(uuid()) @db.Uuid  // 主鍵 UUID
+  code        String   @unique @db.VarChar(50)         // 事業部代碼，全域唯一
+  name        String   @db.VarChar(150)                // 事業部名稱
+  description String?                                  // 事業部描述
+  isActive    Boolean  @default(true)                  // 是否啟用（軟刪除）
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  projects            Project[]
+  userOrgAssignments  UserOrgAssignment[]
+  purchaseAllocations PurchaseRequestAllocation[]
+  approvalTemplates   ApprovalTemplate[]
+
+  @@map("business_units")
+}
+
+/// 項目，可選擇性隸屬於某個事業部
+model Project {
+  id             String    @id @default(uuid()) @db.Uuid  // 主鍵 UUID
+  businessUnitId String?   @db.Uuid                        // 所屬事業部 ID（可選）→ BusinessUnit
+  code           String    @unique @db.VarChar(50)         // 項目代碼，全域唯一
+  name           String    @db.VarChar(150)                // 項目名稱
+  description    String?                                   // 項目描述
+  startDate      DateTime? @db.Date                        // 項目開始日期
+  endDate        DateTime? @db.Date                        // 項目結束日期（null 表示未設定）
+  isActive       Boolean   @default(true)                  // 是否啟用（軟刪除）
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  businessUnit        BusinessUnit?            @relation(fields: [businessUnitId], references: [id])
+  userOrgAssignments  UserOrgAssignment[]
+  purchaseAllocations PurchaseRequestAllocation[]
+
+  @@map("projects")
+}
+
+/// 職位（Job Title），可選擇性歸屬於某間公司
+model Position {
+  id          String   @id @default(uuid()) @db.Uuid  // 主鍵 UUID
+  companyId   String?  @db.Uuid                        // 所屬公司 ID（null 表示集團通用）→ Company
+  code        String   @db.VarChar(50)                 // 職位代碼，在同一公司內唯一
+  name        String   @db.VarChar(100)                // 職位名稱，如 軟體工程師
+  description String?                                  // 職位說明
+  isActive    Boolean  @default(true)                  // 是否啟用（軟刪除）
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company            Company?           @relation(fields: [companyId], references: [id])
+  userOrgAssignments UserOrgAssignment[]
+
+  @@unique([companyId, code])  // 同一公司內職位代碼不重複
+  @@map("positions")
+}
+
+/// 職級（Job Level），表示薪資/晉升等級，如 L1~L7
+model JobLevel {
+  id          String   @id @default(uuid()) @db.Uuid  // 主鍵 UUID
+  code        String   @unique @db.VarChar(50)         // 職級代碼，如 L1 / L2 / MANAGER
+  name        String   @db.VarChar(100)                // 職級名稱，如 初級、中級、主管
+  levelOrder  Int                                      // 排序數字，數字越小職級越低
+  description String?                                  // 職級說明
+  isActive    Boolean  @default(true)                  // 是否啟用（軟刪除）
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userOrgAssignments UserOrgAssignment[]
+
+  @@map("job_levels")
+}
+
+// ═══════════════════════════════════════════════
+// 使用者 / 員工
+// 設計說明：
+//   User = 登入帳號（認證）+ 基本識別資訊
+//   EmployeeProfile = 人事詳細資料（HR管理用）
+//   兩者透過 userId 形成 1:1 關聯
+//   員工工號（employeeNo）存於 User，登入時可用工號或 email 登入
+// ═══════════════════════════════════════════════
+
+/// 使用者帳號（登入憑據 + 基本識別），每位員工對應一個 User
+model User {
+  id                     String    @id @default(uuid()) @db.Uuid    // 主鍵 UUID
+  employeeNo             String?   @unique @db.VarChar(50)           // 員工工號（登入用），如 10001；超級管理員可能無工號
+  email                  String    @unique @db.VarChar(150)          // 電子郵件（亦可用於登入）；全域唯一
+  passwordHash           String?   @db.VarChar(255)                  // bcrypt 雜湊密碼（第三方登入時為 null）
+  authProvider           String    @default("local") @db.VarChar(50) // 登入方式：local / google / azure
+  authProviderUid        String?   @db.VarChar(255)                  // 第三方登入的 UID
+  nameZh                 String?   @db.VarChar(100)                  // 中文姓名
+  nameEn                 String?   @db.VarChar(100)                  // 英文姓名
+  displayName            String    @db.VarChar(100)                  // 顯示名稱（前端展示用）
+  avatarUrl              String?                                     // 頭像 URL（GCS Signed URL 或外部連結）
+  status                 String    @default("pending_activation") @db.VarChar(30) // 帳號狀態：pending_activation / active / suspended / resigned / terminated
+  isSuperAdmin           Boolean   @default(false)                   // 超級管理員旗標，true 時繞過所有權限檢查；由 SUPER_ADMIN 角色指派自動設置
+  lastLoginAt            DateTime?                                   // 最後一次成功登入時間
+  lastLoginIp            String?   @db.VarChar(45)                   // 最後登入 IP（IPv4/IPv6）
+  passwordChangedAt      DateTime?                                   // 密碼最後修改時間（用於強制重新登入判斷）
+  passwordResetToken     String?   @db.VarChar(255)                  // 密碼重置 token（單次有效）
+  passwordResetExpiresAt DateTime?                                   // 密碼重置 token 到期時間
+  refreshToken           String?                                     // JWT Refresh Token（登出後清空）
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  // 1:1 → 人事詳細資料（HR 管理用）
+  employeeProfile        EmployeeProfile?
+
+  // 組織歸屬（一個員工可有多個任務/兼職）
+  orgAssignments         UserOrgAssignment[]
+  // 作為直屬主管被其他人指向
+  managedAssignments     UserOrgAssignment[]    @relation("DirectManager")
+
+  // RBAC：角色指派（透過中間表 UserRole）
+  userRoles              UserRole[]
+  // 授予角色的操作者（我授予了哪些人角色）
+  grantedRoles           UserRole[]             @relation("RoleGrantedBy")
+
+  // 財務申請
+  purchaseRequests        PurchaseRequest[]     @relation("PurchaseApplicant")
+  purchaseRequestsCreated PurchaseRequest[]     @relation("PurchaseCreatedBy")
+  purchaseRequestsUpdated PurchaseRequest[]     @relation("PurchaseUpdatedBy")
+  reimbursementRequests   ReimbursementRequest[] @relation("ReimbursementClaimant")
+  reimbursementCreated    ReimbursementRequest[] @relation("ReimbursementCreatedBy")
+  reimbursementUpdated    ReimbursementRequest[] @relation("ReimbursementUpdatedBy")
+
+  // 其他關聯
+  attachments             Attachment[]
+  approvalStepApprovers   ApprovalStepApprover[]
+  approvalActions         ApprovalAction[]
+  approvalCcUsers         ApprovalCcUser[]
+  dynamicAddedSteps       ApprovalStep[]         @relation("DynamicAddedBy")
+  notifications           Notification[]
+  employeeWorkSchedules   EmployeeWorkSchedule[]
+  workSchedulesCreated    EmployeeWorkSchedule[] @relation("WorkScheduleCreatedBy")
+  attendanceRecords       AttendanceRecord[]
+  clockRecords            ClockRecord[]
+  clockApprovals          ClockRecord[]          @relation("ClockApprovedBy")
+  leaveRequests           LeaveRequest[]         @relation("LeaveRequester")
+  leaveProxy              LeaveRequest[]         @relation("LeaveProxy")
+  leaveCreated            LeaveRequest[]         @relation("LeaveCreatedBy")
+  leaveBalances           LeaveBalance[]
+  overtimeRequests        OvertimeRequest[]      @relation("OvertimeRequester")
+  overtimeCreated         OvertimeRequest[]      @relation("OvertimeCreatedBy")
+  salaryStructures        SalaryStructure[]      @relation("SalaryEmployee")
+  salaryCreated           SalaryStructure[]      @relation("SalaryCreatedBy")
+  payrollRecords          PayrollRecord[]
+  performanceGoals        PerformanceGoal[]
+  reviewee                PerformanceReview[]    @relation("Reviewee")
+  reviewer                PerformanceReview[]    @relation("Reviewer")
+  systemAuditLogs         SystemAuditLog[]
+  approvalTemplateStepApprovers ApprovalTemplateStepApprover[]
+  oaFormRequests          OaFormRequest[]  @relation("OaFormSubmitter")
+
+  @@map("users")
+}
+
+/// 員工組織歸屬紀錄（一個員工可同時有多個歸屬，isPrimary=true 為主要歸屬）
+model UserOrgAssignment {
+  id                  String    @id @default(uuid()) @db.Uuid  // 主鍵 UUID
+  userId              String    @db.Uuid                        // 員工 ID → User
+  companyId           String?   @db.Uuid                        // 所屬公司（可選）→ Company
+  departmentId        String?   @db.Uuid                        // 所屬部門（可選）→ Department
+  businessUnitId      String?   @db.Uuid                        // 所屬事業部（可選）→ BusinessUnit
+  projectId           String?   @db.Uuid                        // 所屬項目（可選）→ Project
+  positionId          String?   @db.Uuid                        // 擔任職位（可選）→ Position
+  jobLevelId          String?   @db.Uuid                        // 職級（可選）→ JobLevel
+  directManagerUserId String?   @db.Uuid                        // 直屬主管 User ID（可選）→ User
+  isPrimary           Boolean   @default(false)                 // 是否為主要歸屬（每人只能有一個 primary）
+  startedAt           DateTime? @db.Date                        // 此歸屬開始日期
+  endedAt             DateTime? @db.Date                        // 此歸屬結束日期（null 表示仍有效）
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  user          User          @relation(fields: [userId], references: [id])
+  company       Company?      @relation(fields: [companyId], references: [id])
+  department    Department?   @relation(fields: [departmentId], references: [id])
+  businessUnit  BusinessUnit? @relation(fields: [businessUnitId], references: [id])
+  project       Project?      @relation(fields: [projectId], references: [id])
+  position      Position?     @relation(fields: [positionId], references: [id])
+  jobLevel      JobLevel?     @relation(fields: [jobLevelId], references: [id])
+  directManager User?         @relation("DirectManager", fields: [directManagerUserId], references: [id])
+
+  @@map("user_org_assignments")
+}
+
+/// 員工人事資料（HR詳細資訊），與 User 為 1:1 關聯
+model EmployeeProfile {
+  id                       String    @id @default(uuid()) @db.Uuid  // 主鍵 UUID
+  userId                   String    @unique @db.Uuid                // 對應的 User ID（1:1，外鍵）→ User
+  birthDate                DateTime? @db.Date                        // 出生日期
+  gender                   String?   @db.VarChar(10)                 // 性別：male / female / other
+  nationality              String?   @db.VarChar(50)                 // 國籍
+  idNumber                 String?   @db.VarChar(255)                // 身分證號碼（應用層加密後儲存）
+  passportNo               String?   @db.VarChar(255)                // 護照號碼（應用層加密後儲存）
+  personalEmail            String?   @db.VarChar(150)                // 個人電子郵件（非公司郵箱）
+  mobilePhone              String?   @db.VarChar(50)                 // 行動電話
+  workPhone                String?   @db.VarChar(50)                 // 辦公室電話分機
+  currentAddress           String?                                   // 現居地址
+  registeredAddress        String?                                   // 戶籍地址
+  emergencyContactName     String?   @db.VarChar(100)                // 緊急聯絡人姓名
+  emergencyContactPhone    String?   @db.VarChar(50)                 // 緊急聯絡人電話
+  emergencyContactRelation String?   @db.VarChar(50)                 // 緊急聯絡人關係，如 配偶 / 父母
+  bankName                 String?   @db.VarChar(100)                // 薪資匯款銀行名稱
+  bankBranch               String?   @db.VarChar(100)                // 銀行分行
+  bankAccountNo            String?   @db.VarChar(255)                // 銀行帳號（應用層加密後儲存）
+  highestEducation         String?   @db.VarChar(50)                 // 最高學歷：high_school / bachelor / master / phd
+  schoolName               String?   @db.VarChar(150)                // 學校名稱
+  major                    String?   @db.VarChar(100)                // 主修科系
+  graduationYear           Int?                                      // 畢業年份
+  hireDate                 DateTime? @db.Date                        // 入職日期
+  probationEndDate         DateTime? @db.Date                        // 試用期結束日期
+  regularDate              DateTime? @db.Date                        // 轉正（正式員工）日期
+  employmentType           String    @default("full_time") @db.VarChar(30) // 僱用類型：full_time / part_time / contract / intern
+  contractStartDate        DateTime? @db.Date                        // 合約開始日（合約工適用）
+  contractEndDate          DateTime? @db.Date                        // 合約結束日（合約工適用）
+  resignationDate          DateTime? @db.Date                        // 離職申請日
+  lastWorkingDate          DateTime? @db.Date                        // 最後工作日
+  terminationType          String?   @db.VarChar(30)                 // 離職類型：resignation / termination / retirement / contract_end
+  terminationReason        String?                                   // 離職原因說明
+  notes                    String?                                   // HR備注
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  // 指向對應的登入帳號 User
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("employee_profiles")
+}
+
+// ═══════════════════════════════════════════════
+// 角色與權限（RBAC）
+// 設計：Role ↔ Permission 多對多（透過 RolePermission）
+//       User ↔ Role 多對多（透過 UserRole，可加 scope 限制範圍）
+//       isSuperAdmin=true 時繞過所有 Permission 檢查
+// ═══════════════════════════════════════════════
+
+/// 角色定義（如 HR管理員、財務審核員）
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid  // 主鍵 UUID
+  code        String   @unique @db.VarChar(100)        // 角色代碼，全域唯一，如 HR_ADMIN / SUPER_ADMIN
+  name        String   @db.VarChar(150)                // 角色顯示名稱
+  description String?                                  // 角色說明
+  isSystem    Boolean  @default(false)                 // 系統內建角色（不可刪除、不可改代碼）
+  isActive    Boolean  @default(true)                  // 是否啟用
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 角色擁有的權限清單（多對多中間表）
+  rolePermissions RolePermission[]
+  // 被指派此角色的使用者紀錄
+  userRoles       UserRole[]
+
+  @@map("roles")
+}
+
+/// 系統功能權限定義（細粒度，如 users.read / purchase.approve）
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid  // 主鍵 UUID
+  code        String   @unique @db.VarChar(150)        // 權限代碼，如 users.write / purchase.approve
+  name        String   @db.VarChar(150)                // 權限顯示名稱（中文）
+  module      String   @db.VarChar(50)                 // 所屬模組：admin / org / hr / finance
+  description String?                                  // 權限說明
+  createdAt   DateTime @default(now())
+
+  // 被哪些角色引用
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+/// 角色-權限關聯中間表（Role 與 Permission 的多對多）
+model RolePermission {
+  id           String   @id @default(uuid()) @db.Uuid  // 主鍵 UUID
+  roleId       String   @db.Uuid                        // 角色 ID → Role
+  permissionId String   @db.Uuid                        // 權限 ID → Permission
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])  // 同一角色不重複指派同一權限
+  @@map("role_permissions")
+}
+
+/// 使用者-角色關聯中間表（User 與 Role 的多對多，可附帶 scope 限制範圍）
+model UserRole {
+  id        String   @id @default(uuid()) @db.Uuid  // 主鍵 UUID
+  userId    String   @db.Uuid                        // 被指派的使用者 ID → User
+  roleId    String   @db.Uuid                        // 角色 ID → Role
+  scopeType String?  @db.VarChar(50)                 // 授權範圍類型：null=全域 / region / company / department
+  scopeId   String?  @db.Uuid                        // 授權範圍的實體 ID（如某公司的 UUID）
+  grantedBy String?  @db.Uuid                        // 授予者 User ID → User（誰指派的）
+  createdAt DateTime @default(now())
+
+  user    User  @relation(fields: [userId], references: [id])
+  role    Role  @relation(fields: [roleId], references: [id])
+  grantor User? @relation("RoleGrantedBy", fields: [grantedBy], references: [id])
+
+  @@unique([userId, roleId, scopeType, scopeId])  // 同一使用者在同一範圍內不重複同一角色
+  @@map("user_roles")
+}
+
+// ═══════════════════════════════════════════════
+// 財務 — 採購申請 / 費用報銷
+// ═══════════════════════════════════════════════
+
+/// 採購申請單（先申請後消費）
+model PurchaseRequest {
+  id                    String    @id @default(uuid()) @db.Uuid
+  requestNo             String    @unique @db.VarChar(50)         // 申請單號，系統自動產生，如 PR-2024-00001
+  applicantUserId       String    @db.Uuid                        // 申請人 ID → User
+  applicantCompanyId    String?   @db.Uuid                        // 申請人所屬公司 → Company
+  applicantDepartmentId String?   @db.Uuid                        // 申請人所屬部門 → Department
+  title                 String    @db.VarChar(200)                // 申請標題
+  description           String?                                   // 申請說明
+  totalAmount           Decimal   @db.Decimal(18, 2)              // 申請總金額
+  currencyCode          String    @db.VarChar(10)                 // 幣別
+  status                String    @default("draft") @db.VarChar(30) // 狀態：draft/submitted/approved/rejected/canceled
+  submittedAt           DateTime?                                 // 提交審核時間
+  approvedAt            DateTime?                                 // 核准時間
+  rejectedAt            DateTime?                                 // 駁回時間
+  canceledAt            DateTime?                                 // 取消時間
+  createdBy             String    @db.Uuid
+  updatedBy             String?   @db.Uuid
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  applicant   User        @relation("PurchaseApplicant", fields: [applicantUserId], references: [id])
+  company     Company?    @relation(fields: [applicantCompanyId], references: [id])
+  department  Department? @relation(fields: [applicantDepartmentId], references: [id])
+  creator     User        @relation("PurchaseCreatedBy", fields: [createdBy], references: [id])
+  updater     User?       @relation("PurchaseUpdatedBy", fields: [updatedBy], references: [id])
+  allocations PurchaseRequestAllocation[]
+  reimbursements ReimbursementRequest[]
+
+  @@map("purchase_requests")
+}
+
+/// 採購申請費用分攤明細（同一申請可分攤至多個公司/部門/項目）
+model PurchaseRequestAllocation {
+  id                String   @id @default(uuid()) @db.Uuid
+  purchaseRequestId String   @db.Uuid                   // 所屬採購申請 → PurchaseRequest
+  regionId          String   @db.Uuid                   // 分攤地區 → Region
+  companyId         String   @db.Uuid                   // 分攤公司 → Company
+  departmentId      String?  @db.Uuid                   // 分攤部門（可選）→ Department
+  businessUnitId    String?  @db.Uuid                   // 分攤事業部（可選）→ BusinessUnit
+  projectId         String?  @db.Uuid                   // 分攤項目（可選）→ Project
+  amount            Decimal  @db.Decimal(18, 2)          // 分攤金額
+  currencyCode      String   @db.VarChar(10)             // 幣別
+  description       String?                             // 說明
+  reimbursedAmount  Decimal  @default(0) @db.Decimal(18, 2) // 已報銷金額（自動累計）
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  purchaseRequest    PurchaseRequest @relation(fields: [purchaseRequestId], references: [id])
+  region             Region          @relation(fields: [regionId], references: [id])
+  company            Company         @relation(fields: [companyId], references: [id])
+  department         Department?     @relation(fields: [departmentId], references: [id])
+  businessUnit       BusinessUnit?   @relation(fields: [businessUnitId], references: [id])
+  project            Project?        @relation(fields: [projectId], references: [id])
+  reimbursementItems ReimbursementItem[]
+
+  @@map("purchase_request_allocations")
+}
+
+/// 費用報銷單（實際發生費用後申請報銷）
+model ReimbursementRequest {
+  id                     String    @id @default(uuid()) @db.Uuid
+  reimbursementNo        String    @unique @db.VarChar(50)          // 報銷單號，系統自動產生
+  purchaseRequestId      String?   @db.Uuid                         // 關聯採購申請（可選）→ PurchaseRequest
+  claimantUserId         String    @db.Uuid                         // 報銷申請人 → User
+  reimbursementCompanyId String    @db.Uuid                         // 報銷所屬公司 → Company
+  reimbursementRegionId  String    @db.Uuid                         // 報銷所屬地區 → Region
+  title                  String    @db.VarChar(200)
+  description            String?
+  totalAmount            Decimal   @db.Decimal(18, 2)
+  currencyCode           String    @db.VarChar(10)
+  status                 String    @default("draft") @db.VarChar(30) // draft/submitted/approved/rejected/paid/canceled
+  submittedAt            DateTime?
+  approvedAt             DateTime?
+  rejectedAt             DateTime?
+  paidAt                 DateTime?                                   // 已付款時間
+  canceledAt             DateTime?
+  createdBy              String    @db.Uuid
+  updatedBy              String?   @db.Uuid
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  purchaseRequest PurchaseRequest?  @relation(fields: [purchaseRequestId], references: [id])
+  claimant        User              @relation("ReimbursementClaimant", fields: [claimantUserId], references: [id])
+  company         Company           @relation(fields: [reimbursementCompanyId], references: [id])
+  region          Region            @relation(fields: [reimbursementRegionId], references: [id])
+  creator         User              @relation("ReimbursementCreatedBy", fields: [createdBy], references: [id])
+  updater         User?             @relation("ReimbursementUpdatedBy", fields: [updatedBy], references: [id])
+  items           ReimbursementItem[]
+
+  @@map("reimbursement_requests")
+}
+
+/// 報銷明細項目（每筆費用一行）
+model ReimbursementItem {
+  id                          String    @id @default(uuid()) @db.Uuid
+  reimbursementRequestId      String    @db.Uuid                  // 所屬報銷單 → ReimbursementRequest
+  purchaseRequestAllocationId String?   @db.Uuid                  // 對應的採購分攤項目（可選）→ PurchaseRequestAllocation
+  expenseDate                 DateTime? @db.Date                   // 消費日期
+  expenseType                 String?   @db.VarChar(100)           // 費用類型，如 餐費 / 交通費 / 住宿
+  amount                      Decimal   @db.Decimal(18, 2)
+  currencyCode                String    @db.VarChar(10)
+  vendorName                  String?   @db.VarChar(150)           // 供應商/商家名稱
+  invoiceNo                   String?   @db.VarChar(100)           // 發票號碼
+  description                 String?
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+
+  reimbursementRequest      ReimbursementRequest        @relation(fields: [reimbursementRequestId], references: [id])
+  purchaseRequestAllocation PurchaseRequestAllocation?  @relation(fields: [purchaseRequestAllocationId], references: [id])
+
+  @@map("reimbursement_items")
+}
+
+// ═══════════════════════════════════════════════
+// 附件
+// ═══════════════════════════════════════════════
+
+/// 通用附件（多態關聯，refType + refId 指向任意表）
+model Attachment {
+  id         String   @id @default(uuid()) @db.Uuid
+  refType    String   @db.VarChar(50)   // 關聯的資料類型，如 purchase_request / reimbursement
+  refId      String   @db.Uuid          // 關聯的資料 UUID
+  fileName   String   @db.VarChar(255)  // 原始檔案名稱
+  filePath   String                     // GCS 儲存路徑
+  fileSize   BigInt?                    // 檔案大小（bytes）
+  mimeType   String?  @db.VarChar(100)  // MIME 類型，如 application/pdf
+  uploadedBy String   @db.Uuid          // 上傳者 → User
+  uploadedAt DateTime @default(now())
+
+  uploader User @relation(fields: [uploadedBy], references: [id])
+
+  @@map("attachments")
+}
+
+// ═══════════════════════════════════════════════
+// 審批流程引擎
+// 設計：ApprovalTemplate（模板）→ ApprovalInstance（單次流程快照）→
+//       ApprovalStep（步驟）→ ApprovalAction（操作紀錄）
+// ═══════════════════════════════════════════════
+
+/// 審批流程模板（可依 formType / 金額區間 / 所屬公司部門設定不同模板）
+model ApprovalTemplate {
+  id             String    @id @default(uuid()) @db.Uuid
+  code           String    @unique @db.VarChar(50)         // 模板代碼
+  name           String    @db.VarChar(150)                // 模板名稱
+  formType       String    @db.VarChar(50)                 // 適用表單類型：purchase_request / reimbursement / leave
+  regionId       String?   @db.Uuid                        // 適用地區（null=全域）
+  companyId      String?   @db.Uuid                        // 適用公司（null=全域）
+  departmentId   String?   @db.Uuid                        // 適用部門（null=全域）
+  businessUnitId String?   @db.Uuid                        // 適用事業部（null=全域）
+  minAmount      Decimal?  @db.Decimal(18, 2)              // 適用最低金額（null=不限）
+  maxAmount      Decimal?  @db.Decimal(18, 2)              // 適用最高金額（null=不限）
+  currencyCode   String?   @db.VarChar(10)
+  priority       Int       @default(100)                   // 優先序，數字越小越優先
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  region       Region?       @relation(fields: [regionId], references: [id])
+  company      Company?      @relation(fields: [companyId], references: [id])
+  department   Department?   @relation(fields: [departmentId], references: [id])
+  businessUnit BusinessUnit? @relation(fields: [businessUnitId], references: [id])
+  steps        ApprovalTemplateStep[]
+  ccUsers      ApprovalTemplateCcUser[]
+  instances    ApprovalInstance[]
+
+  @@map("approval_templates")
+}
+
+/// 審批模板步驟定義
+model ApprovalTemplateStep {
+  id                 String   @id @default(uuid()) @db.Uuid
+  approvalTemplateId String   @db.Uuid
+  stepOrder          Int                               // 步驟順序，從 1 開始
+  stepName           String   @db.VarChar(150)        // 步驟名稱，如 部門主管審核
+  approvalMode       String   @default("all") @db.VarChar(30) // 審批模式：all=全部同意 / any=任一同意 / majority=多數同意
+  isRequired         Boolean  @default(true)           // 是否為必要步驟
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  template  ApprovalTemplate              @relation(fields: [approvalTemplateId], references: [id])
+  approvers ApprovalTemplateStepApprover[]
+
+  @@unique([approvalTemplateId, stepOrder])
+  @@map("approval_template_steps")
+}
+
+/// 審批模板步驟的審核人設定
+model ApprovalTemplateStepApprover {
+  id                     String   @id @default(uuid()) @db.Uuid
+  approvalTemplateStepId String   @db.Uuid
+  approverType           String   @db.VarChar(50)   // 審核人類型：user=指定人員 / role=角色 / direct_manager=直屬主管
+  approverUserId         String?  @db.Uuid           // 指定審核人（approverType=user 時使用）
+  approverRoleCode       String?  @db.VarChar(100)   // 審核角色代碼（approverType=role 時使用）
+  createdAt              DateTime @default(now())
+
+  step     ApprovalTemplateStep @relation(fields: [approvalTemplateStepId], references: [id])
+  approver User?                @relation(fields: [approverUserId], references: [id])
+
+  @@map("approval_template_step_approvers")
+}
+
+/// 審批模板 CC 通知設定
+model ApprovalTemplateCcUser {
+  id                 String   @id @default(uuid()) @db.Uuid
+  approvalTemplateId String   @db.Uuid
+  ccType             String   @db.VarChar(50)   // CC類型：user / role
+  ccUserId           String?  @db.Uuid
+  ccRoleCode         String?  @db.VarChar(100)
+  createdAt          DateTime @default(now())
+
+  template ApprovalTemplate @relation(fields: [approvalTemplateId], references: [id])
+
+  @@map("approval_template_cc_users")
+}
+
+/// 審批流程實例（每次提交申請時，依模板快照建立一個實例）
+model ApprovalInstance {
+  id                 String    @id @default(uuid()) @db.Uuid
+  formType           String    @db.VarChar(50)               // 表單類型
+  formId             String    @db.Uuid                      // 對應的業務資料 UUID（如 PurchaseRequest.id）
+  approvalTemplateId String?   @db.Uuid                      // 使用的模板（快照起點）
+  status             String    @default("pending") @db.VarChar(30) // pending / approved / rejected / canceled
+  currentStepOrder   Int?                                    // 目前審批到第幾步
+  startedAt          DateTime?
+  completedAt        DateTime?
+  canceledAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  template ApprovalTemplate? @relation(fields: [approvalTemplateId], references: [id])
+  steps    ApprovalStep[]
+  actions  ApprovalAction[]
+  ccUsers  ApprovalCcUser[]
+
+  @@map("approval_instances")
+}
+
+/// 審批流程實例的步驟快照
+model ApprovalStep {
+  id                 String    @id @default(uuid()) @db.Uuid
+  approvalInstanceId String    @db.Uuid
+  stepOrder          Int
+  stepName           String    @db.VarChar(150)
+  approvalMode       String    @default("all") @db.VarChar(30)
+  status             String    @default("pending") @db.VarChar(30)  // pending / approved / rejected / skipped
+  startedAt          DateTime?
+  completedAt        DateTime?
+  isDynamicAdded     Boolean   @default(false)   // 是否為臨時加簽
+  addedBy            String?   @db.Uuid           // 加簽操作者
+  addedReason        String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  instance    ApprovalInstance       @relation(fields: [approvalInstanceId], references: [id])
+  addedByUser User?                  @relation("DynamicAddedBy", fields: [addedBy], references: [id])
+  approvers   ApprovalStepApprover[]
+  actions     ApprovalAction[]
+
+  @@unique([approvalInstanceId, stepOrder])
+  @@map("approval_steps")
+}
+
+/// 審批步驟的具體審核人及其結果
+model ApprovalStepApprover {
+  id             String    @id @default(uuid()) @db.Uuid
+  approvalStepId String    @db.Uuid
+  approverUserId String    @db.Uuid
+  status         String    @default("pending") @db.VarChar(30)  // pending / approved / rejected
+  actedAt        DateTime?                                       // 審核操作時間
+  comment        String?                                         // 審核意見
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  step     ApprovalStep @relation(fields: [approvalStepId], references: [id])
+  approver User         @relation(fields: [approverUserId], references: [id])
+
+  @@map("approval_step_approvers")
+}
+
+/// 審批操作歷史（每次 approve/reject/comment 都記錄）
+model ApprovalAction {
+  id                 String   @id @default(uuid()) @db.Uuid
+  approvalInstanceId String   @db.Uuid
+  approvalStepId     String?  @db.Uuid
+  approverUserId     String?  @db.Uuid
+  action             String   @db.VarChar(50)  // approve / reject / cancel / comment / add_step
+  comment            String?
+  metadata           Json?                     // 額外資訊（JSONB）
+  createdAt          DateTime @default(now())
+
+  instance ApprovalInstance  @relation(fields: [approvalInstanceId], references: [id])
+  step     ApprovalStep?     @relation(fields: [approvalStepId], references: [id])
+  approver User?             @relation(fields: [approverUserId], references: [id])
+
+  @@map("approval_actions")
+}
+
+/// 審批流程 CC 通知接收人（快照，隨實例建立時確定）
+model ApprovalCcUser {
+  id                 String   @id @default(uuid()) @db.Uuid
+  approvalInstanceId String   @db.Uuid
+  ccUserId           String   @db.Uuid
+  hasRead            Boolean  @default(false)
+  readAt             DateTime?
+  createdAt          DateTime @default(now())
+
+  instance ApprovalInstance @relation(fields: [approvalInstanceId], references: [id])
+  user     User             @relation(fields: [ccUserId], references: [id])
+
+  @@map("approval_cc_users")
+}
+
+// ═══════════════════════════════════════════════
+// 通知
+// ═══════════════════════════════════════════════
+
+/// 系統站內通知
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid              // 通知接收人 → User
+  title     String    @db.VarChar(200)      // 通知標題
+  message   String?                         // 通知內容
+  refType   String?   @db.VarChar(50)       // 關聯資料類型（可選）
+  refId     String?   @db.Uuid              // 關聯資料 UUID（可選）
+  isRead    Boolean   @default(false)       // 是否已讀
+  readAt    DateTime?                       // 已讀時間
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+// ═══════════════════════════════════════════════
+// HR — 假日 / 班表 / 考勤 / 假勤 / 薪資 / 績效
+// ═══════════════════════════════════════════════
+
+/// 國定假日 / 補班日（依地區或公司設定）
+model PublicHoliday {
+  id          String   @id @default(uuid()) @db.Uuid
+  regionId    String?  @db.Uuid               // 適用地區（null=全域）
+  companyId   String?  @db.Uuid               // 適用公司（null=全域）
+  holidayDate DateTime @db.Date               // 日期
+  name        String   @db.VarChar(150)       // 假日名稱，如 元旦
+  isWorkDay   Boolean  @default(false)        // true=補班日，false=放假日
+  createdAt   DateTime @default(now())
+
+  region  Region?  @relation(fields: [regionId], references: [id])
+  company Company? @relation(fields: [companyId], references: [id])
+
+  @@unique([regionId, companyId, holidayDate])
+  @@map("public_holidays")
+}
+
+/// 班別定義（如正常班、輪班制）
+model WorkSchedule {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique @db.VarChar(50)
+  name        String   @db.VarChar(100)          // 班別名稱，如 正常班 / 夜班
+  description String?
+  timezone    String   @default("UTC") @db.VarChar(100)  // 班別時區
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rules             WorkScheduleRule[]
+  employeeSchedules EmployeeWorkSchedule[]
+
+  @@map("work_schedules")
+}
+
+/// 班別每日規則（每週幾、上下班時間）
+model WorkScheduleRule {
+  id             String    @id @default(uuid()) @db.Uuid
+  workScheduleId String    @db.Uuid
+  dayOfWeek      Int                         // 0=週日, 1=週一, ..., 6=週六
+  isWorkDay      Boolean   @default(true)    // 是否為工作日
+  workStartTime  DateTime? @db.Time(6)       // 上班時間
+  workEndTime    DateTime? @db.Time(6)       // 下班時間
+  breakStartTime DateTime? @db.Time(6)       // 午休開始
+  breakEndTime   DateTime? @db.Time(6)       // 午休結束
+  createdAt      DateTime  @default(now())
+
+  workSchedule WorkSchedule @relation(fields: [workScheduleId], references: [id])
+
+  @@map("work_schedule_rules")
+}
+
+/// 員工班別指派（記錄哪個員工哪段期間使用哪個班別）
+model EmployeeWorkSchedule {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @db.Uuid
+  workScheduleId String    @db.Uuid
+  effectiveDate  DateTime  @db.Date   // 生效日期
+  endDate        DateTime? @db.Date   // 結束日期（null=持續有效）
+  createdBy      String?   @db.Uuid
+  createdAt      DateTime  @default(now())
+
+  user         User         @relation(fields: [userId], references: [id])
+  workSchedule WorkSchedule @relation(fields: [workScheduleId], references: [id])
+  creator      User?        @relation("WorkScheduleCreatedBy", fields: [createdBy], references: [id])
+
+  @@map("employee_work_schedules")
+}
+
+/// 假別定義（年假、病假、事假等）
+model LeaveType {
+  id                   String   @id @default(uuid()) @db.Uuid
+  code                 String   @unique @db.VarChar(50)       // 假別代碼，如 ANNUAL / SICK / PERSONAL
+  name                 String   @db.VarChar(100)              // 假別名稱
+  description          String?
+  requiresApproval     Boolean  @default(true)                // 是否需要審核
+  isPaid               Boolean  @default(true)                // 是否有薪假
+  isAnnual             Boolean  @default(true)                // 是否為年度假（年初重置餘額）
+  allowCarryOver       Boolean  @default(false)               // 是否允許餘額遞延到下年度
+  carryOverLimitDays   Decimal? @db.Decimal(5, 1)             // 最多可遞延天數
+  allowNegativeBalance Boolean  @default(false)               // 是否允許餘額為負（先休後補）
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  leavePolicies LeavePolicies[]
+  leaveBalances LeaveBalance[]
+  leaveRequests LeaveRequest[]
+
+  @@map("leave_types")
+}
+
+/// 假勤政策（各公司/地區不同假別的天數配置）
+model LeavePolicies {
+  id               String   @id @default(uuid()) @db.Uuid
+  leaveTypeId      String   @db.Uuid
+  companyId        String?  @db.Uuid             // 適用公司（null=全域）
+  regionId         String?  @db.Uuid             // 適用地區（null=全域）
+  minServiceMonths Int      @default(0)           // 最低服務月數門檻
+  maxServiceMonths Int?                           // 最高服務月數（null=不限）
+  annualDays       Decimal  @db.Decimal(5, 1)    // 每年天數
+  description      String?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+  company   Company?  @relation(fields: [companyId], references: [id])
+  region    Region?   @relation(fields: [regionId], references: [id])
+
+  @@map("leave_policies")
+}
+
+/// 員工假別餘額（每人每年每種假別的餘額紀錄）
+model LeaveBalance {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid
+  leaveTypeId   String   @db.Uuid
+  year          Int                              // 年度
+  entitledDays  Decimal  @default(0) @db.Decimal(5, 1)  // 本年度應有天數
+  carryOverDays Decimal  @default(0) @db.Decimal(5, 1)  // 上年度遞延天數
+  adjustedDays  Decimal  @default(0) @db.Decimal(5, 1)  // 人工調整天數（HR可調整）
+  usedDays      Decimal  @default(0) @db.Decimal(5, 1)  // 已使用天數
+  pendingDays   Decimal  @default(0) @db.Decimal(5, 1)  // 審核中天數
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id])
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  @@unique([userId, leaveTypeId, year])
+  @@map("leave_balances")
+}
+
+/// 請假申請單
+model LeaveRequest {
+  id          String    @id @default(uuid()) @db.Uuid
+  requestNo   String    @unique @db.VarChar(50)
+  userId      String    @db.Uuid                     // 請假人 → User
+  leaveTypeId String    @db.Uuid                     // 假別 → LeaveType
+  startDate   DateTime  @db.Date                     // 請假開始日
+  endDate     DateTime  @db.Date                     // 請假結束日
+  startPeriod String?   @db.VarChar(10)              // 開始半天：AM / PM（可選）
+  endPeriod   String?   @db.VarChar(10)              // 結束半天：AM / PM（可選）
+  totalDays   Decimal   @db.Decimal(5, 1)            // 總天數
+  reason      String?
+  proxyUserId String?   @db.Uuid                     // 職務代理人 → User（可選）
+  status      String    @default("draft") @db.VarChar(30)
+  submittedAt DateTime?
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  canceledAt  DateTime?
+  createdBy   String    @db.Uuid
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user      User      @relation("LeaveRequester", fields: [userId], references: [id])
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+  proxy     User?     @relation("LeaveProxy", fields: [proxyUserId], references: [id])
+  creator   User      @relation("LeaveCreatedBy", fields: [createdBy], references: [id])
+
+  @@map("leave_requests")
+}
+
+/// 日考勤記錄（每人每工作日一筆，由系統自動產生或補登）
+model AttendanceRecord {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @db.Uuid
+  workDate          DateTime  @db.Date              // 工作日期
+  expectedStartTime DateTime?                       // 應到時間
+  expectedEndTime   DateTime?                       // 應離時間
+  actualClockIn     DateTime?                       // 實際打卡上班
+  actualClockOut    DateTime?                       // 實際打卡下班
+  workMinutes       Int       @default(0)           // 實際工時（分鐘）
+  overtimeMinutes   Int       @default(0)           // 加班時數（分鐘）
+  lateMinutes       Int       @default(0)           // 遲到分鐘
+  earlyLeaveMinutes Int       @default(0)           // 早退分鐘
+  status            String    @default("normal") @db.VarChar(30) // normal / late / absent / leave / holiday
+  leaveRequestId    String?   @db.Uuid              // 關聯假單（有請假時）
+  note              String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id])
+  clockRecords ClockRecord[]
+
+  @@unique([userId, workDate])
+  @@map("attendance_records")
+}
+
+/// 打卡記錄（每次打卡一筆，支援 GPS / QR / IP 等多種打卡方式）
+model ClockRecord {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @db.Uuid
+  attendanceRecordId String?   @db.Uuid               // 對應日考勤記錄（可選）
+  clockType          String    @db.VarChar(30)         // 類型：clock_in / clock_out
+  clockTime          DateTime                          // 打卡時間（含時區）
+  clockMethod        String    @db.VarChar(30)         // 方式：web / gps / qr_code / manual
+  latitude           Decimal?  @db.Decimal(10, 8)      // GPS 緯度
+  longitude          Decimal?  @db.Decimal(11, 8)      // GPS 經度
+  locationName       String?   @db.VarChar(200)        // 地點名稱（如 台北辦公室）
+  ipAddress          String?   @db.VarChar(45)         // 打卡來源 IP
+  isManual           Boolean   @default(false)         // 是否為補登（需主管審核）
+  manualReason       String?                           // 補登原因
+  approvedBy         String?   @db.Uuid                // 補登審核人 → User
+  approvedAt         DateTime?
+  createdAt          DateTime  @default(now())
+
+  user             User              @relation(fields: [userId], references: [id])
+  attendanceRecord AttendanceRecord? @relation(fields: [attendanceRecordId], references: [id])
+  approver         User?             @relation("ClockApprovedBy", fields: [approvedBy], references: [id])
+
+  @@map("clock_records")
+}
+
+/// 加班申請單
+model OvertimeRequest {
+  id               String    @id @default(uuid()) @db.Uuid
+  requestNo        String    @unique @db.VarChar(50)
+  userId           String    @db.Uuid
+  overtimeDate     DateTime  @db.Date
+  startTime        DateTime  @db.Time(6)
+  endTime          DateTime  @db.Time(6)
+  totalHours       Decimal   @db.Decimal(4, 1)
+  overtimeType     String    @db.VarChar(30)   // 類型：weekday / weekend / holiday
+  compensationType String    @default("pay") @db.VarChar(30)  // 補償方式：pay=加班費 / leave=補休
+  reason           String?
+  status           String    @default("draft") @db.VarChar(30)
+  submittedAt      DateTime?
+  approvedAt       DateTime?
+  rejectedAt       DateTime?
+  createdBy        String    @db.Uuid
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user    User @relation("OvertimeRequester", fields: [userId], references: [id])
+  creator User @relation("OvertimeCreatedBy", fields: [createdBy], references: [id])
+
+  @@map("overtime_requests")
+}
+
+/// 員工薪資結構（每次調薪建立新紀錄，歷史紀錄保留）
+model SalaryStructure {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @db.Uuid
+  currencyCode  String    @db.VarChar(10)
+  baseSalary    Decimal   @default(0) @db.Decimal(18, 2)  // 基本薪資
+  allowances    Json      @default("{}")                   // 津貼明細（JSONB，如交通費、餐費）
+  effectiveDate DateTime  @db.Date                        // 此薪資結構生效日
+  endDate       DateTime? @db.Date                        // 此薪資結構失效日（null=目前有效）
+  changeReason  String?                                   // 異動原因，如 年度調薪 / 晉升
+  createdBy     String    @db.Uuid
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user           User            @relation("SalaryEmployee", fields: [userId], references: [id])
+  creator        User            @relation("SalaryCreatedBy", fields: [createdBy], references: [id])
+  payrollRecords PayrollRecord[]
+
+  @@map("salary_structures")
+}
+
+/// 薪資期間定義（每月一筆，鎖定後不可修改）
+model PayrollPeriod {
+  id          String    @id @default(uuid()) @db.Uuid
+  year        Int                              // 年度
+  month       Int                              // 月份（1~12）
+  periodStart DateTime  @db.Date              // 計算起始日
+  periodEnd   DateTime  @db.Date              // 計算結束日
+  payDate     DateTime? @db.Date              // 實際發薪日
+  status      String    @default("draft") @db.VarChar(30)  // draft / calculating / locked / paid
+  lockedAt    DateTime?                       // 鎖定時間（鎖定後不可再修改）
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  payrollRecords PayrollRecord[]
+
+  @@unique([year, month])
+  @@map("payroll_periods")
+}
+
+/// 員工月薪資計算結果
+model PayrollRecord {
+  id                String   @id @default(uuid()) @db.Uuid
+  payrollPeriodId   String   @db.Uuid
+  userId            String   @db.Uuid
+  salaryStructureId String?  @db.Uuid
+  currencyCode      String   @db.VarChar(10)
+  baseSalary        Decimal  @default(0) @db.Decimal(18, 2)
+  totalAllowances   Decimal  @default(0) @db.Decimal(18, 2)  // 各項津貼合計
+  overtimePay       Decimal  @default(0) @db.Decimal(18, 2)  // 加班費
+  bonus             Decimal  @default(0) @db.Decimal(18, 2)  // 獎金
+  grossSalary       Decimal  @default(0) @db.Decimal(18, 2)  // 應發薪資合計
+  incomeTax         Decimal  @default(0) @db.Decimal(18, 2)  // 所得稅代扣
+  socialInsurance   Decimal  @default(0) @db.Decimal(18, 2)  // 社保/勞健保代扣
+  otherDeductions   Decimal  @default(0) @db.Decimal(18, 2)  // 其他扣款
+  totalDeductions   Decimal  @default(0) @db.Decimal(18, 2)  // 扣款合計
+  netSalary         Decimal  @default(0) @db.Decimal(18, 2)  // 實發薪資
+  calculationDetail Json?                                     // 計算明細（JSONB）
+  status            String   @default("draft") @db.VarChar(30)
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  payrollPeriod   PayrollPeriod    @relation(fields: [payrollPeriodId], references: [id])
+  user            User             @relation(fields: [userId], references: [id])
+  salaryStructure SalaryStructure? @relation(fields: [salaryStructureId], references: [id])
+
+  @@unique([payrollPeriodId, userId])
+  @@map("payroll_records")
+}
+
+/// 績效考核週期定義（年度/半年度考核）
+model PerformanceCycle {
+  id               String    @id @default(uuid()) @db.Uuid
+  code             String    @unique @db.VarChar(50)
+  name             String    @db.VarChar(150)
+  cycleType        String    @db.VarChar(30)   // annual / semi_annual / quarterly
+  startDate        DateTime  @db.Date
+  endDate          DateTime  @db.Date
+  goalSettingStart DateTime? @db.Date          // 目標設定開放時間
+  goalSettingEnd   DateTime? @db.Date          // 目標設定截止時間
+  reviewStartDate  DateTime? @db.Date          // 考核評分開放時間
+  reviewEndDate    DateTime? @db.Date          // 考核評分截止時間
+  status           String    @default("draft") @db.VarChar(30)  // draft / goal_setting / reviewing / completed
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  goals   PerformanceGoal[]
+  reviews PerformanceReview[]
+
+  @@map("performance_cycles")
+}
+
+/// 員工績效目標
+model PerformanceGoal {
+  id                 String   @id @default(uuid()) @db.Uuid
+  performanceCycleId String   @db.Uuid
+  userId             String   @db.Uuid
+  title              String   @db.VarChar(200)
+  description        String?
+  targetValue        String?                          // 目標值（文字描述或數值）
+  weight             Decimal  @default(100) @db.Decimal(5, 2)  // 目標權重百分比
+  selfAssessment     String?                          // 員工自評說明
+  selfRating         Decimal? @db.Decimal(3, 1)       // 員工自評分數（如 1.0~5.0）
+  managerAssessment  String?                          // 主管評語
+  managerRating      Decimal? @db.Decimal(3, 1)       // 主管評分
+  status             String   @default("draft") @db.VarChar(30)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  cycle PerformanceCycle @relation(fields: [performanceCycleId], references: [id])
+  user  User             @relation(fields: [userId], references: [id])
+
+  @@map("performance_goals")
+}
+
+/// 績效考核結果（主管對員工的整體評核）
+model PerformanceReview {
+  id                 String    @id @default(uuid()) @db.Uuid
+  performanceCycleId String    @db.Uuid
+  revieweeUserId     String    @db.Uuid              // 被考核人 → User
+  reviewerUserId     String    @db.Uuid              // 考核人（主管）→ User
+  overallComment     String?                         // 整體評語
+  finalRating        Decimal?  @db.Decimal(3, 1)    // 最終評分
+  ratingLabel        String?   @db.VarChar(50)       // 評級標籤，如 超越預期 / 符合預期
+  status             String    @default("pending") @db.VarChar(30)
+  completedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  cycle    PerformanceCycle @relation(fields: [performanceCycleId], references: [id])
+  reviewee User             @relation("Reviewee", fields: [revieweeUserId], references: [id])
+  reviewer User             @relation("Reviewer", fields: [reviewerUserId], references: [id])
+
+  @@unique([performanceCycleId, revieweeUserId, reviewerUserId])
+  @@map("performance_reviews")
+}
+
+// ═══════════════════════════════════════════════
+// 公告
+// ═══════════════════════════════════════════════
+
+/// 公告（首頁 Dashboard 公告欄）
+model Announcement {
+  id             String   @id @default(uuid()) @db.Uuid   // 主鍵 UUID
+  title          String   @db.VarChar(200)                 // 公告標題
+  category       String   @db.VarChar(100)                 // 主分類，如 工作規則辦法、人資公告
+  type           String   @db.VarChar(100)                 // 類型，如 一般公告、重要公告、制度文件
+  content        String                                    // 公告正文（富文本）
+  contentPreview String?  @db.VarChar(500)                 // 摘要（列表頁顯示用）
+  authorId       String?  @db.Uuid                         // 發布者 User ID（可選）
+  authorName     String   @db.VarChar(100)                 // 發布者姓名（冗餘儲存，方便顯示）
+  publishDate    DateTime                                  // 發布日期
+  isPinned       Boolean  @default(false)                  // 是否置頂
+  scopeType      String   @default("global") @db.VarChar(50) // 可見範圍：global / company / department / role
+  scopeId        String?  @db.Uuid                         // 可見範圍 ID（null 表示全局可見）
+  isActive       Boolean  @default(true)                   // 是否啟用（軟刪除）
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  attachments AnnouncementAttachment[]
+  tags        AnnouncementTag[]
+
+  @@map("announcements")
+}
+
+/// 公告附件
+model AnnouncementAttachment {
+  id             String  @id @default(uuid()) @db.Uuid  // 主鍵 UUID
+  announcementId String  @db.Uuid                        // 所屬公告 ID → Announcement
+  fileName       String  @db.VarChar(255)                // 原始檔名
+  fileUrl        String                                  // 檔案 URL（GCS Signed URL 或靜態路徑）
+  fileType       String  @db.VarChar(100)                // MIME 類型或副檔名，如 application/pdf
+  fileSize       Int?                                    // 檔案大小（bytes）
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@map("announcement_attachments")
+}
+
+/// 公告標籤
+model AnnouncementTag {
+  id             String @id @default(uuid()) @db.Uuid  // 主鍵 UUID
+  announcementId String @db.Uuid                        // 所屬公告 ID → Announcement
+  tag            String @db.VarChar(100)                // 標籤文字
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@map("announcement_tags")
+}
+
+// ═══════════════════════════════════════════════
+// 系統稽核日誌
+// ═══════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════
+// OA 電子表單
+// ═══════════════════════════════════════════════
+
+/// OA 通用電子表單申請（支援多種表單類型，欄位以 JSONB 儲存）
+model OaFormRequest {
+  id              String   @id @default(uuid()) @db.Uuid
+  formType        String   @db.VarChar(50)                      // asset_request | meal_allowance | it_request | headcount_request | resignation
+  submitterUserId String   @db.Uuid
+  content         Json     @default("{}")                        // 各表單類型的欄位（JSONB）
+  status          String   @default("pending") @db.VarChar(30)  // pending | approved | rejected | canceled
+  approvalInstanceId String? @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  submitter User @relation("OaFormSubmitter", fields: [submitterUserId], references: [id])
+
+  @@index([submitterUserId])
+  @@index([status])
+  @@map("oa_form_requests")
+}
+
+/// 系統操作稽核日誌（所有重要操作皆記錄）
+model SystemAuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  operatorUserId String   @db.Uuid              // 操作者 → User
+  action         String   @db.VarChar(100)      // 操作代碼，如 user.create / role.assign
+  targetType     String?  @db.VarChar(50)       // 操作對象類型，如 user / role
+  targetId       String?  @db.Uuid              // 操作對象 UUID
+  oldData        Json?                          // 操作前資料（JSONB 快照）
+  newData        Json?                          // 操作後資料（JSONB 快照）
+  ipAddress      String?  @db.VarChar(45)       // 操作者 IP
+  userAgent      String?                        // 瀏覽器/客戶端資訊
+  createdAt      DateTime @default(now())
+
+  operator User @relation(fields: [operatorUserId], references: [id])
+
+  @@map("system_audit_logs")
+}

@@ -1,0 +1,177 @@
+<template>
+  <div>
+    <div class="page-header">
+      <h2>報銷審核</h2>
+    </div>
+
+    <!-- Summary stat cards -->
+    <el-row :gutter="16" class="stat-row">
+      <el-col :span="6">
+        <el-card class="stat-card">
+          <div class="stat-value warning">0</div>
+          <div class="stat-label">待審核</div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card class="stat-card">
+          <div class="stat-value success">0</div>
+          <div class="stat-label">已核准本月</div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card class="stat-card">
+          <div class="stat-value primary">0</div>
+          <div class="stat-label">本月申請總額</div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card class="stat-card">
+          <div class="stat-value">0</div>
+          <div class="stat-label">筆數總計</div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-card>
+      <div class="toolbar">
+        <el-select v-model="statusFilter" placeholder="狀態篩選" clearable style="width: 140px" @change="onSearch">
+          <el-option label="草稿" value="draft" />
+          <el-option label="審核中" value="submitted" />
+          <el-option label="核准" value="approved" />
+          <el-option label="駁回" value="rejected" />
+          <el-option label="已付款" value="paid" />
+          <el-option label="取消" value="canceled" />
+        </el-select>
+        <el-select v-model="companyFilter" placeholder="篩選公司" clearable style="width: 180px" @change="onSearch">
+        </el-select>
+        <el-date-picker
+          v-model="dateRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="開始日期"
+          end-placeholder="結束日期"
+          value-format="YYYY-MM-DD"
+          style="width: 260px"
+          @change="onSearch"
+        />
+      </div>
+
+      <el-table v-loading="loading" :data="data" border stripe>
+        <el-table-column prop="reimbursementNo" label="報銷單號" width="160" />
+        <el-table-column prop="title" label="標題" min-width="160" />
+        <el-table-column prop="applicantName" label="申請人" width="110" />
+        <el-table-column prop="companyName" label="公司" width="140" />
+        <el-table-column label="金額" width="150">
+          <template #default="{ row }">
+            <span class="amount">{{ row.totalAmount }} {{ row.currencyCode }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="提交日期" width="120">
+          <template #default="{ row }">
+            {{ formatDate(row.submittedAt ?? row.createdAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="狀態" width="100">
+          <template #default="{ row }">
+            <el-tag :type="statusType(row.status, STATUS_TYPE_MAP)" size="small">
+              {{ statusLabel(row.status, STATUS_LABEL_MAP) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="140" fixed="right">
+          <template #default="{ row }">
+            <el-button text size="small">詳情</el-button>
+            <el-button v-if="row.status === 'approved'" text size="small" type="primary">付款</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-pagination
+        v-if="total > 0"
+        v-model:current-page="pagination.page"
+        v-model:page-size="pagination.limit"
+        :total="total"
+        :page-sizes="[20, 50, 100]"
+        layout="total, sizes, prev, pager, next"
+        class="pagination"
+        @current-change="handlePageChange"
+        @size-change="handleSizeChange"
+      />
+    </el-card>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import dayjs from 'dayjs'
+import { reimbursementsApi } from '@/api/finance.api'
+import { useUiStore } from '@/stores/ui.store'
+import { useTable } from '@/composables/useTable'
+
+const ui = useUiStore()
+const statusFilter = ref('')
+const companyFilter = ref('')
+const dateRange = ref<[string, string] | null>(null)
+
+const STATUS_LABEL_MAP: Record<string, string> = {
+  draft: '草稿',
+  submitted: '審核中',
+  approved: '核准',
+  rejected: '駁回',
+  paid: '已付款',
+  canceled: '取消',
+}
+
+const STATUS_TYPE_MAP: Record<string, 'success' | 'warning' | 'danger' | 'info'> = {
+  draft: 'info',
+  submitted: 'warning',
+  approved: 'success',
+  rejected: 'danger',
+  paid: 'success',
+  canceled: 'info',
+}
+
+function statusLabel(status: string, map: Record<string, string>) {
+  return map[status] ?? status
+}
+
+function statusType(status: string, map: Record<string, 'success' | 'warning' | 'danger' | 'info'>) {
+  return map[status] ?? 'info'
+}
+
+function formatDate(date?: string) {
+  return date ? dayjs(date).format('YYYY-MM-DD') : '—'
+}
+
+const { loading, data, total, pagination, fetch, handlePageChange, handleSizeChange } = useTable({
+  fetchFn: (params) => reimbursementsApi.getAll(params as Parameters<typeof reimbursementsApi.getAll>[0]),
+})
+
+onMounted(() => {
+  ui.setBreadcrumbs([{ title: '財務模塊' }, { title: '報銷審核' }])
+  fetch()
+})
+
+function onSearch() {
+  pagination.page = 1
+  fetch({
+    status: statusFilter.value || undefined,
+    companyId: companyFilter.value || undefined,
+  })
+}
+</script>
+
+<style scoped>
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.page-header h2 { font-size: 20px; font-weight: 600; margin: 0; }
+.toolbar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.pagination { margin-top: 16px; justify-content: flex-end; }
+.amount { font-weight: 600; color: #409eff; }
+.stat-row { margin-bottom: 20px; }
+.stat-card { text-align: center; }
+.stat-value { font-size: 28px; font-weight: 700; line-height: 1.2; }
+.stat-value.warning { color: #e6a23c; }
+.stat-value.success { color: #67c23a; }
+.stat-value.primary { color: #409eff; }
+.stat-label { font-size: 13px; color: #909399; margin-top: 6px; }
+</style>
