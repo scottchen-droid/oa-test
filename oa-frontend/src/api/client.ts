@@ -1,8 +1,10 @@
 import axios, { type AxiosInstance } from 'axios'
 import { ElMessage } from 'element-plus'
 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+
 const client: AxiosInstance = axios.create({
-  baseURL: '',
+  baseURL: BASE_URL,
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 })
@@ -44,7 +46,7 @@ client.interceptors.response.use(
       isRefreshing = true
 
       try {
-        const resp = await axios.post('/api/auth/refresh', { refreshToken })
+        const resp = await axios.post(`${BASE_URL}/api/auth/refresh`, { refreshToken })
         const newToken = resp.data.data.accessToken
         localStorage.setItem('access_token', newToken)
         pendingRequests.forEach((cb) => cb(newToken))

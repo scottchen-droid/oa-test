@@ -7,22 +7,29 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 
-@Catch(HttpException)
+@Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
-  catch(exception: HttpException, host: ArgumentsHost) {
+  catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
-    const status = exception.getStatus();
-    const exceptionResponse = exception.getResponse();
 
-    let message: string | string[];
-    if (typeof exceptionResponse === 'string') {
-      message = exceptionResponse;
-    } else if (typeof exceptionResponse === 'object') {
-      message = (exceptionResponse as any).message || exception.message;
-    } else {
-      message = exception.message;
+    let status = HttpStatus.INTERNAL_SERVER_ERROR;
+    let message: string | string[] = 'Internal server error';
+
+    if (exception instanceof HttpException) {
+      status = exception.getStatus();
+      const exceptionResponse = exception.getResponse();
+      if (typeof exceptionResponse === 'string') {
+        message = exceptionResponse;
+      } else if (typeof exceptionResponse === 'object') {
+        message = (exceptionResponse as any).message || exception.message;
+      }
+    } else if (exception instanceof Error) {
+      message =
+        process.env.NODE_ENV !== 'production'
+          ? exception.message
+          : 'Internal server error';
     }
 
     response.status(status).json({

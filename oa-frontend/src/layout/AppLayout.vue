@@ -121,8 +121,8 @@
           <el-menu-item index="/administration/meeting-rooms">會議室管理</el-menu-item>
         </el-sub-menu>
 
-        <!-- 系統管理員模塊 -->
-        <el-sub-menu v-if="auth.isSuperAdmin || auth.hasModuleAccess('system')" index="system-module">
+        <!-- 系統模塊 -->
+        <el-sub-menu v-if="auth.hasModuleAccess('system')" index="system-module">
           <template #title>
             <el-icon><Setting /></el-icon>
             <span>系統管理員</span>

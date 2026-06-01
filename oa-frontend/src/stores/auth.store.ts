@@ -10,22 +10,29 @@ export const useAuthStore = defineStore('auth', () => {
   const refreshToken = ref<string | null>(localStorage.getItem('refresh_token'))
 
   const isLoggedIn = computed(() => !!accessToken.value)
-  const isSuperAdmin = computed(() => user.value?.isSuperAdmin ?? false)
 
-  // Permission helpers — until full RBAC is wired up, admin modules require isSuperAdmin
-  // Phase 5 will wire actual permission codes from userRoles/permissions API
+  const roleCodes = computed(() =>
+    user.value?.userRoles?.map((ur) => ur.role.code) ?? [],
+  )
+
+  // 模塊存取：以角色碼判斷，ADMIN 角色擁有所有模塊
   function hasModuleAccess(module: 'hr' | 'finance' | 'administration' | 'system'): boolean {
-    if (user.value?.isSuperAdmin) return true
-    // TODO: check user.userRoles for module-level permissions
-    return false
+    if (!user.value) return false
+    if (roleCodes.value.includes('ADMIN')) return true
+    const ACCESS_MAP: Record<string, string[]> = {
+      hr:             ['HR_ADMIN'],
+      finance:        ['FINANCE_ADMIN'],
+      administration: ['HR_ADMIN', 'FINANCE_ADMIN', 'DEPT_MANAGER'],
+      system:         [],
+    }
+    return ACCESS_MAP[module]?.some((r) => roleCodes.value.includes(r)) ?? false
   }
 
-  // Returns true if current user should see the manager section
-  // (has isSuperAdmin OR has any user_roles with approval-related permissions)
+  // 是否顯示主管功能區塊
   const isManager = computed(() => {
-    if (user.value?.isSuperAdmin) return true
-    // TODO: derive from userRoles once RBAC is implemented
-    return false
+    if (!user.value) return false
+    const managerRoles = ['ADMIN', 'DEPT_MANAGER', 'APPROVER', 'HR_ADMIN', 'FINANCE_ADMIN']
+    return roleCodes.value.some((r) => managerRoles.includes(r))
   })
 
   async function login(account: string, password: string) {
@@ -77,7 +84,7 @@ export const useAuthStore = defineStore('auth', () => {
     accessToken,
     refreshToken,
     isLoggedIn,
-    isSuperAdmin,
+    roleCodes,
     isManager,
     hasModuleAccess,
     login,

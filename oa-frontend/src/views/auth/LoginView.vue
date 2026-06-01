@@ -82,8 +82,11 @@ async function handleLogin() {
     await auth.login(form.account, form.password)
     const redirect = (route.query.redirect as string) || '/dashboard'
     router.push(redirect)
-  } catch {
-    ElMessage.error('登入失敗，請確認帳號密碼是否正確')
+  } catch (err: any) {
+    // interceptor 已對非 401 錯誤顯示 toast，這裡只補 401（帳密錯誤）和無回應（網路錯誤）
+    if (!err.response || err.response.status === 401) {
+      ElMessage.error('帳號或密碼錯誤，請重新確認')
+    }
   } finally {
     loading.value = false
   }

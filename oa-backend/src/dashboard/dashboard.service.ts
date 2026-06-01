@@ -52,7 +52,7 @@ export class DashboardService {
       avatarUrl: user.avatarUrl ?? undefined,
     }
 
-    const shortcuts = this.buildShortcuts(user.isSuperAdmin)
+    const shortcuts = this.buildShortcuts()
 
     return {
       currentUser,
@@ -76,7 +76,7 @@ export class DashboardService {
     }
   }
 
-  private buildShortcuts(isSuperAdmin: boolean) {
+  private buildShortcuts() {
     const all = [
       { id: 'notifications', name: '通知', icon: 'Bell', route: '/notifications', badgeCount: 0, permissionCode: null },
       { id: 'approvals', name: '簽核', icon: 'Check', route: '/approvals', badgeCount: 0, permissionCode: null },

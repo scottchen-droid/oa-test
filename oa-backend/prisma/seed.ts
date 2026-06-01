@@ -58,7 +58,7 @@ const PERMISSIONS = [
 ];
 
 const ROLES = [
-  { code: 'SUPER_ADMIN',   name: '超級管理員',  description: '系統最高權限，可操作所有功能',          isSystem: true },
+  { code: 'ADMIN',         name: '系統管理員',  description: '具備所有功能的管理角色，由角色權限控管',  isSystem: true },
   { code: 'HR_ADMIN',      name: 'HR管理員',    description: '管理員工、薪資與假勤政策',              isSystem: true },
   { code: 'FINANCE_ADMIN', name: '財務管理員',  description: '管理採購申請與費用報銷',                isSystem: true },
   { code: 'DEPT_MANAGER',  name: '部門主管',    description: '審核部門內的假勤與採購申請',            isSystem: true },
@@ -285,7 +285,18 @@ async function main() {
   for (const r of ROLES) {
     await prisma.role.upsert({ where: { code: r.code }, create: r, update: {} });
   }
-  console.log(`   ✓ ${PERMISSIONS.length} 個權限、${ROLES.length} 個角色\n`);
+
+  // ADMIN 角色自動擁有所有權限
+  const adminRole = await prisma.role.findUnique({ where: { code: 'ADMIN' } });
+  const allPerms = await prisma.permission.findMany({ select: { id: true } });
+  if (adminRole && allPerms.length > 0) {
+    await prisma.rolePermission.createMany({
+      data: allPerms.map((p) => ({ roleId: adminRole.id, permissionId: p.id })),
+      skipDuplicates: true,
+    });
+  }
+
+  console.log(`   ✓ ${PERMISSIONS.length} 個權限、${ROLES.length} 個角色（ADMIN 角色已指派全部 ${allPerms.length} 個權限）\n`);
 
   // 1b. 假別
   console.log('📅 建立假別...');
@@ -385,22 +396,39 @@ async function main() {
   }
   console.log(`   ✓ ${POSITIONS.length} 個職位\n`);
 
-  // 9. 更新 admin 帳號工號
-  console.log('👑 更新超級管理員帳號...');
-  const adminUser = await prisma.user.findUnique({ where: { email: 'admin' } });
-  if (adminUser) {
-    await prisma.user.update({ where: { id: adminUser.id }, data: { employeeNo: '00001', displayName: '系統管理員', nameZh: '系統管理員', nameEn: 'System Admin' } });
-    // 指派 SUPER_ADMIN 角色
-    const superAdminRole = await prisma.role.findUnique({ where: { code: 'SUPER_ADMIN' } });
-    if (superAdminRole) {
-      const exists = await prisma.userRole.findFirst({ where: { userId: adminUser.id, roleId: superAdminRole.id } });
-      if (!exists) {
-        await prisma.userRole.create({ data: { userId: adminUser.id, roleId: superAdminRole.id } });
-      }
-    }
-    console.log('   ✓ admin (00001) 工號已設定、SUPER_ADMIN 角色已指派\n');
+  // 9. 建立系統管理員帳號（初始登入帳號）
+  console.log('🔑 建立系統管理員帳號...');
+  const adminEmail = 'admin@oa.com';
+  let adminUser = await prisma.user.findFirst({
+    where: { OR: [{ email: adminEmail }, { employeeNo: '00001' }] },
+  });
+  if (!adminUser) {
+    adminUser = await prisma.user.create({
+      data: {
+        employeeNo: '00001',
+        email: adminEmail,
+        displayName: '系統管理員',
+        nameZh: '系統管理員',
+        nameEn: 'System Admin',
+        passwordHash: await bcrypt.hash(DEFAULT_PASSWORD, 12),
+        status: 'active',
+        passwordChangedAt: new Date(),
+      },
+    });
+    console.log(`   ✓ 帳號已建立：${adminEmail}\n`);
   } else {
-    console.log('   ⚠ 未找到 admin 帳號，請先執行 bootstrap 或手動建立\n');
+    await prisma.user.update({
+      where: { id: adminUser.id },
+      data: { employeeNo: '00001', displayName: '系統管理員', nameZh: '系統管理員', nameEn: 'System Admin' },
+    });
+    console.log(`   ✓ 帳號已存在，資料更新完成\n`);
+  }
+  // 指派 ADMIN 角色
+  if (adminRole) {
+    const existsRole = await prisma.userRole.findFirst({ where: { userId: adminUser.id, roleId: adminRole.id } });
+    if (!existsRole) {
+      await prisma.userRole.create({ data: { userId: adminUser.id, roleId: adminRole.id, grantedBy: adminUser.id } });
+    }
   }
 
   // 10. 建立員工帳號與組織歸屬
@@ -491,14 +519,14 @@ async function main() {
   console.log(`   ✓ 組織歸屬完成\n`);
 
   console.log('✅ 種子資料植入完成！');
-  console.log('\n📌 登入資訊：');
-  console.log('   帳號    | 密碼');
-  console.log('   --------|----------');
-  console.log(`   00001   | ${DEFAULT_PASSWORD}  (系統管理員)`);
-  console.log(`   10001   | ${DEFAULT_PASSWORD}  (王大明 - IT部門主管)`);
-  console.log(`   10002   | ${DEFAULT_PASSWORD}  (張美玲 - HR管理員)`);
-  console.log(`   10003   | ${DEFAULT_PASSWORD}  (陳志遠 - 財務管理員)`);
-  console.log(`   ...所有員工密碼均為 ${DEFAULT_PASSWORD}`);
+  console.log('\n📌 登入資訊（密碼均為）：', DEFAULT_PASSWORD);
+  console.log('   工號  / Email                 | 身份');
+  console.log('   ------------------------------|------------------');
+  console.log(`   00001 / admin@oa.com          | 系統管理員（ADMIN 角色）`);
+  console.log(`   10001 / david.wang@oa.com     | IT部門主管`);
+  console.log(`   10002 / lily.zhang@oa.com     | HR管理員`);
+  console.log(`   10003 / ken.chen@oa.com       | 財務管理員`);
+  console.log('   （其餘所有員工密碼相同）');
 }
 
 main()

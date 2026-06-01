@@ -8,7 +8,7 @@ import {
 } from './dto/announcement.dto'
 
 @ApiTags('Announcements')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @Controller('announcements')
 export class AnnouncementsController {
   constructor(private readonly service: AnnouncementsService) {}

@@ -17,7 +17,7 @@ export class AssignRoleDto {
   scopeId?: string;
 }
 
-const SUPER_ADMIN_CODE = 'SUPER_ADMIN';
+const ADMIN_CODE = 'ADMIN';
 
 const DEFAULT_PERMISSIONS = [
   // 模塊入口
@@ -71,13 +71,13 @@ const DEFAULT_PERMISSIONS = [
 ];
 
 const DEFAULT_ROLES = [
-  { code: SUPER_ADMIN_CODE, name: '超級管理員', description: '系統最高權限，可操作所有功能', isSystem: true },
-  { code: 'HR_ADMIN', name: 'HR管理員', description: '管理員工、薪資與假勤政策', isSystem: true },
-  { code: 'FINANCE_ADMIN', name: '財務管理員', description: '管理採購申請與費用報銷', isSystem: true },
-  { code: 'DEPT_MANAGER', name: '部門主管', description: '審核部門內的假勤與採購申請', isSystem: true },
-  { code: 'APPROVER', name: '審核人員', description: '可審核各類申請', isSystem: true },
-  { code: 'EMPLOYEE', name: '一般員工', description: 'OA基本功能', isSystem: true },
-  { code: 'AUDITOR', name: '稽核人員', description: '唯讀存取所有財務文件', isSystem: true },
+  { code: ADMIN_CODE,       name: '系統管理員', description: '具備所有功能的管理角色，由角色權限控管',  isSystem: true },
+  { code: 'HR_ADMIN',       name: 'HR管理員',   description: '管理員工、薪資與假勤政策',              isSystem: true },
+  { code: 'FINANCE_ADMIN',  name: '財務管理員', description: '管理採購申請與費用報銷',                isSystem: true },
+  { code: 'DEPT_MANAGER',   name: '部門主管',   description: '審核部門內的假勤與採購申請',            isSystem: true },
+  { code: 'APPROVER',       name: '審核人員',   description: '可審核各類申請',                       isSystem: true },
+  { code: 'EMPLOYEE',       name: '一般員工',   description: 'OA基本功能',                          isSystem: true },
+  { code: 'AUDITOR',        name: '稽核人員',   description: '唯讀存取所有財務文件',                  isSystem: true },
 ];
 
 @Injectable()
@@ -145,7 +145,6 @@ export class RolesService implements OnModuleInit {
   async assignPermissionsToRole(roleId: string, permissionIds: string[], operatorId: string) {
     const role = await this.prisma.role.findUnique({ where: { id: roleId } });
     if (!role) throw new NotFoundException('Role not found');
-    if (role.code === SUPER_ADMIN_CODE) throw new ConflictException('SUPER_ADMIN permissions cannot be modified');
 
     await this.prisma.rolePermission.deleteMany({ where: { roleId } });
 
@@ -179,10 +178,6 @@ export class RolesService implements OnModuleInit {
           data: { userId, roleId: dto.roleId, scopeType: dto.scopeType, scopeId: dto.scopeId, grantedBy: operatorId },
         });
 
-    if (role.code === SUPER_ADMIN_CODE) {
-      await this.prisma.user.update({ where: { id: userId }, data: { isSuperAdmin: true } });
-    }
-
     await this.prisma.systemAuditLog.create({
       data: { operatorUserId: operatorId, action: 'role.assign', targetType: 'user', targetId: userId, newData: { roleId: dto.roleId, scopeType: dto.scopeType } as any },
     });
@@ -194,10 +189,6 @@ export class RolesService implements OnModuleInit {
     const role = await this.prisma.role.findUnique({ where: { id: roleId } });
 
     await this.prisma.userRole.deleteMany({ where: { userId, roleId } });
-
-    if (role?.code === SUPER_ADMIN_CODE) {
-      await this.prisma.user.update({ where: { id: userId }, data: { isSuperAdmin: false } });
-    }
 
     await this.prisma.systemAuditLog.create({
       data: { operatorUserId: operatorId, action: 'role.revoke', targetType: 'user', targetId: userId, newData: { roleId } as any },
@@ -216,7 +207,6 @@ export class RolesService implements OnModuleInit {
     });
 
     if (!user) return [];
-    if (user.isSuperAdmin) return ['*'];
 
     const codes = new Set<string>();
     for (const ur of user.userRoles) {
@@ -234,6 +224,16 @@ export class RolesService implements OnModuleInit {
 
     for (const role of DEFAULT_ROLES) {
       await this.prisma.role.upsert({ where: { code: role.code }, create: role, update: {} });
+    }
+
+    // ADMIN 角色自動擁有所有權限
+    const adminRole = await this.prisma.role.findUnique({ where: { code: ADMIN_CODE } });
+    const allPerms = await this.prisma.permission.findMany({ select: { id: true } });
+    if (adminRole && allPerms.length > 0) {
+      await this.prisma.rolePermission.createMany({
+        data: allPerms.map((p) => ({ roleId: adminRole.id, permissionId: p.id })),
+        skipDuplicates: true,
+      });
     }
 
     return { message: 'Default roles and permissions seeded', roles: DEFAULT_ROLES.length, permissions: DEFAULT_PERMISSIONS.length };

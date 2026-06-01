@@ -1,21 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.store'
-import { adminApi } from '@/api/admin.api'
-
-let bootstrapChecked = false
-let bootstrapNeeded = false
 
 const Placeholder = () => import('@/views/common/PlaceholderView.vue')
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    {
-      path: '/setup',
-      name: 'Bootstrap',
-      component: () => import('@/views/auth/BootstrapView.vue'),
-      meta: { public: true },
-    },
     {
       path: '/login',
       name: 'Login',
@@ -396,17 +386,6 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to, _from, next) => {
-  if (!bootstrapChecked && to.name !== 'Bootstrap') {
-    try {
-      const status = await adminApi.getBootstrapStatus()
-      bootstrapNeeded = status.needed
-      bootstrapChecked = true
-    } catch {
-      bootstrapChecked = true
-    }
-    if (bootstrapNeeded) return next({ name: 'Bootstrap' })
-  }
-
   if (to.meta.public) {
     const auth = useAuthStore()
     if (auth.isLoggedIn && to.name === 'Login') return next('/home')
@@ -425,10 +404,5 @@ router.beforeEach(async (to, _from, next) => {
 
   next()
 })
-
-export function resetBootstrapCache() {
-  bootstrapChecked = false
-  bootstrapNeeded = false
-}
 
 export default router
