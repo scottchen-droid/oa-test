@@ -178,37 +178,59 @@ GET  /api/finance/allocations/summary?month=&companyId=
 ## 五、財務報表 `/finance/reports`
 
 ### 功能概述
-提供財務相關統計報表，支援多維度分析。
+提供財務相關統計報表，支援多維度分析。財務報表維度依據組織結構設計，涵蓋兩條組織線。
+
+### 報表查詢維度
+
+| 維度 | 欄位 | 說明 |
+|------|------|------|
+| 地區 | `regionId` | 辦公室組織線：地區維度 |
+| 公司 | `companyId` | 辦公室組織線：發薪/費用主體 |
+| 事業部 | `businessUnitId` | 集團業務線：事業部維度 |
+| 項目 | `projectId` | 集團業務線：項目成本歸屬 |
+| 部門 | `departmentId` | 費用/成本歸屬部門 |
+| 員工 | `userId` | 個人費用 |
+| 表單類型 | `formType` | 採購/報銷/薪資成本等 |
+| 費用類型 | `expenseType` | 費用細項分類 |
+| 月份 | `year+month` | 時間維度 |
+| 幣別 | `currencyCode` | 多幣別支援 |
 
 ### 報表類型
 
 **5.1 採購統計報表**
-- 按月份、公司、部門、申請人統計採購金額
+- 按月份、地區、公司、事業部、**項目**、部門、申請人統計採購金額
 - 申請件數、審核通過率、平均審批時長
 
 **5.2 報銷統計報表**
-- 按月份、費用類別、部門統計報銷金額
+- 按月份、費用類別、地區、公司、**項目**、部門統計報銷金額
 - 待付款金額、已付款金額
 
-**5.3 費用分攤報表**
-- 各公司/部門實際承擔的費用分攤金額
+**5.3 費用分攤報表（採購）**
+- 各公司/事業部/項目/部門實際承擔的費用分攤金額（`purchase_request_allocations`）
 - 跨公司費用分攤明細
 
-**5.4 付款流水報表**
+**5.4 薪資成本分攤報表**
+- 依 `payroll_cost_allocation_snapshots` 彙整
+- 按地區、公司、事業部、**項目**、部門分析薪資成本
+- 支援月份篩選，快照已鎖定不受組織異動影響
+- 用於項目成本核算、跨公司成本對帳
+
+**5.5 付款流水報表**
 - 月度付款明細
 - 累計付款金額
 
 ### 報表操作
 - 日期範圍篩選
-- 公司/部門篩選
+- 地區/公司/事業部/項目/部門篩選
 - 匯出 Excel（Phase 2）
-- 圖表視覺化（折線圖/柱狀圖，Phase 2）
+- 圖表視覺化（Phase 2）
 
 ### API
 ```
-GET /api/finance/reports/purchase-stats?year=&month=&companyId=
-GET /api/finance/reports/reimbursement-stats?year=&month=&companyId=
-GET /api/finance/reports/allocation-summary?year=&companyId=
+GET /api/finance/reports/purchase-stats?year=&month=&regionId=&companyId=&projectId=&deptId=
+GET /api/finance/reports/reimbursement-stats?year=&month=&regionId=&companyId=&projectId=
+GET /api/finance/reports/allocation-summary?year=&companyId=&projectId=
+GET /api/finance/reports/payroll-cost?periodId=&regionId=&companyId=&businessUnitId=&projectId=
 GET /api/finance/reports/payment-flow?year=&month=
 ```
 

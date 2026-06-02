@@ -78,20 +78,37 @@ PUT    /api/employees/:id/org-assignments
 ## 二、組織配置 `/hr/org-assignments`
 
 ### 功能概述
-批量管理員工的組織歸屬。一名員工可有多個組織指派（e.g., 同時屬於多個 BU/項目）。
+管理員工的組織歸屬。員工同時具備「辦公室組織線」（地區/公司）和「集團業務組織線」（事業部/項目/部門）兩種歸屬，並支援多筆兼任歸屬。
+
+### 歸屬類型（`assignmentType`）
+| 類型 | 說明 |
+|------|------|
+| `primary` | 主要歸屬（每人只能有一筆） |
+| `secondary` | 兼任歸屬（可有多筆） |
+| `temporary` | 臨時指派（有期限的臨時支援） |
+
+### 主要歸屬必填欄位
+每位員工的 primary 歸屬需包含：`regionId`、`companyId`、`businessUnitId`、`projectId`、`departmentId`、`directManagerUserId`（缺少時 HR 應補齊）。
 
 ### 功能項目
-- 以樹狀/列表方式顯示部門與成員
-- 調整員工所屬部門/BU/職位
-- 指定直屬主管
-- 員工轉調（部門間 transfer）記錄
+- 查看員工組織歸屬（含主要 + 兼任）
+- 新增兼任歸屬（secondary / temporary）
+- 設定/異動直屬主管
+- 員工轉調（終止舊主要歸屬，建立新主要歸屬，記錄起訖日期）
+- 查看員工歷史組織異動紀錄（`isActive=false` 的歷史紀錄）
 - 批量調整
 
 ### API
 ```
-GET  /api/hr/org-assignments?dept=&company=
-PUT  /api/hr/org-assignments/:userId  { deptId, positionId, jobLevelId, managerId }
-POST /api/hr/transfers  { userId, fromDeptId, toDeptId, effectiveDate, reason }
+GET    /api/hr/org-assignments?userId=&companyId=&deptId=&assignmentType=primary
+GET    /api/hr/org-assignments/:userId           (查詢某員工所有歸屬)
+POST   /api/hr/org-assignments  { userId, regionId, companyId, businessUnitId, projectId,
+                                   departmentId, positionId, jobLevelId, directManagerUserId,
+                                   assignmentType, startedAt, endedAt? }
+PUT    /api/hr/org-assignments/:id
+DELETE /api/hr/org-assignments/:id  (軟停用：isActive=false + endedAt=today)
+POST   /api/hr/transfers  { userId, fromAssignmentId, toOrgData{...}, effectiveDate, reason }
+GET    /api/hr/org-assignments/:userId/history   (歷史組織異動)
 ```
 
 ---
@@ -166,22 +183,54 @@ PUT  /api/leaves/types/:id
 
 ---
 
-## 五、薪資管理 `/hr/payroll`
+## 五、員工成本分攤 `/hr/cost-allocations`
+
+### 功能概述
+設定員工薪資成本的分攤比例，支援多項目分攤。薪資成本不一定 100% 歸屬單一項目（例如 A 項目 50%、B 項目 50%）。
+
+### 業務規則
+1. 同一員工在同一期間的所有成本分攤比例加總必須為 **100%**
+2. 每筆分攤可指定地區、公司、事業部、項目、部門
+3. 支援生效/失效日期，歷史紀錄不可覆蓋
+4. 若員工未設定成本分攤，預設 **100% 歸屬主要組織歸屬**
+5. 薪資計算完成後產生 `payroll_cost_allocation_snapshots`，後續組織異動不影響已結算月份
+
+### 功能項目
+- 查看員工當前有效的成本分攤設定
+- 新增/修改成本分攤（自動驗證比例合計是否為 100%）
+- 查看成本分攤歷史
+- 薪資期別鎖定時自動產生成本分攤快照
+
+### API
+```
+GET    /api/hr/cost-allocations?userId=&isActive=true
+POST   /api/hr/cost-allocations  { userId, regionId?, companyId?, businessUnitId?,
+                                    projectId?, departmentId?, allocationPercent,
+                                    startedAt, endedAt? }
+PUT    /api/hr/cost-allocations/:id
+DELETE /api/hr/cost-allocations/:id   (軟停用)
+GET    /api/hr/cost-allocations/:userId/validate  (驗證同期間比例是否 = 100%)
+```
+
+---
+
+## 六、薪資管理 `/hr/payroll`
 
 ### 功能概述
 HR/財務 管理薪資結構、計算每月薪資、生成薪資單。
 
-### 5.1 薪資期間管理
+### 6.1 薪資期間管理
 - 建立/鎖定薪資期間（通常為每月）
 - 薪資計算觸發（手動 or 自動）
+- **鎖定時自動產生 `payroll_cost_allocation_snapshots`**（依員工當期有效成本分攤設定）
 - 鎖定後不可修改
 
-### 5.2 薪資明細
+### 6.2 薪資明細
 - 查看每位員工的薪資明細
 - 明細項目：基本薪、加班費、補貼、扣勞健保、扣稅、實發金額
 - 批量生成薪資單 PDF（Phase 2）
 
-### 5.3 薪資結構設定
+### 6.3 薪資結構設定
 - 定義薪資項目（底薪、交通補貼、餐補等）
 - 計算公式設定（加班費計算規則）
 
@@ -189,16 +238,17 @@ HR/財務 管理薪資結構、計算每月薪資、生成薪資單。
 ```
 GET  /api/payroll/periods
 POST /api/payroll/periods
-PUT  /api/payroll/periods/:id/lock
+PUT  /api/payroll/periods/:id/lock           (鎖定並產生成本分攤快照)
 GET  /api/payroll/records?periodId=&employeeId=
 POST /api/payroll/records/calculate  { periodId }
 GET  /api/payroll/structures
 POST /api/payroll/structures
+GET  /api/payroll/cost-snapshots?periodId=&projectId=&userId=
 ```
 
 ---
 
-## 六、績效管理 `/hr/performance`
+## 七、績效管理 `/hr/performance`
 
 ### 功能概述
 HR 建立考核週期，員工設定目標，主管進行考核評分。

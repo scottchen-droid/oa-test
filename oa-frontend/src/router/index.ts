@@ -38,20 +38,6 @@ const router = createRouter({
           meta: { title: '首頁' },
         },
 
-        // 個人中心
-        {
-          path: 'home/personal/notifications',
-          name: 'MyNotifications',
-          component: Placeholder,
-          meta: { title: '我的通知' },
-        },
-        {
-          path: 'home/personal/payslips',
-          name: 'MyPayslips',
-          component: Placeholder,
-          meta: { title: '我的薪資' },
-        },
-
         // 考勤管理（員工自助）
         {
           path: 'home/attendance/clock',
@@ -83,13 +69,13 @@ const router = createRouter({
           path: 'home/forms/requests',
           name: 'FormRequests',
           component: () => import('@/views/home/FormRequestsView.vue'),
-          meta: { title: '電子表單申請' },
+          meta: { title: '申請' },
         },
         {
           path: 'home/forms/approvals',
           name: 'MyFormApprovals',
           component: () => import('@/views/home/MyFormApprovalsView.vue'),
-          meta: { title: '電子表單簽核' },
+          meta: { title: '簽核' },
         },
 
         // 登入記錄

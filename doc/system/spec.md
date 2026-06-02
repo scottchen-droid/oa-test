@@ -198,72 +198,119 @@ DELETE /api/user-roles/:id
 ## 三、組織架構
 
 > 組織架構是整個 OA 系統的基礎，必須先建立才能進行員工管理和流程審批。
-> 建立順序：地區 → 公司 → 部門 → 業務單位 → 職位 + 職級
+
+### 雙組織線設計
+
+OA 系統同時維護兩條組織線，兩者皆重要但用途不同：
+
+| 組織線 | 層級 | 用途 |
+|--------|------|------|
+| **地區 / 公司辦公室線** | 地區 → 公司 → 員工 | 發薪主體、人事行政、當地財務流程、審批路徑（`office_org`） |
+| **集團業務線** | 事業部 → 項目 → 部門 → 員工 | 業務管理、項目負責、成本歸屬、集團審批路徑（`group_org`） |
+
+同一員工同時具備兩種歸屬，記錄在 `user_org_assignments`。
+
+> 建立順序：地區 → 公司 → 事業部 → 項目 → 部門 → 職位 + 職級 → 員工 → 組織配置 → 組織負責人
 
 ### 3.1 地區管理 `/system/org/regions`
 **資料表：** `regions`
-**欄位：** 地區名稱（中/英）、地區代碼、幣別、時區、所屬國家、狀態
+**欄位：** 地區名稱（中/英）、地區代碼（如 TW / JP）、幣別、時區、狀態
 
 **API**
 ```
 GET    /api/regions
-POST   /api/regions    { name, code, country, currency, timezone }
+POST   /api/regions    { name, code, currency, timezone }
 PUT    /api/regions/:id
 DELETE /api/regions/:id
 ```
 
 ### 3.2 公司管理 `/system/org/companies`
 **資料表：** `companies`
-**欄位：** 公司全名（中/英）、公司代碼、所屬地區、法人統編/登記號、公司地址、電話、狀態
+**欄位：** 公司全名、公司代碼、所屬地區、法人統編、幣別（覆蓋地區預設）、狀態
 
 **API**
 ```
 GET    /api/companies?regionId=
-POST   /api/companies   { name, code, regionId, taxId, address, phone }
+POST   /api/companies   { name, code, regionId, taxId, currencyCode? }
 PUT    /api/companies/:id
 DELETE /api/companies/:id
 ```
 
-### 3.3 部門管理 `/system/org/departments`
-**資料表：** `departments`
-**欄位：** 部門名稱（中/英）、部門代碼、所屬公司、上層部門（支援多層）、部門主管、狀態
-
-支援樹狀結構（`parentId`），可顯示部門層級。
-
-**API**
-```
-GET    /api/departments?companyId=
-GET    /api/departments/tree?companyId=   (樹狀結構)
-POST   /api/departments   { name, code, companyId, parentId?, managerId? }
-PUT    /api/departments/:id
-DELETE /api/departments/:id
-```
-
-### 3.4 業務單位管理 `/system/org/business-units`
+### 3.3 事業部管理 `/system/org/business-units`
 **資料表：** `business_units`
-**欄位：** BU 名稱（中/英）、BU 代碼、所屬公司、負責人、狀態
+**欄位：** 事業部名稱、代碼、描述、**事業部負責人**（`headUserId`，選填）、狀態
+
+> 若需多位負責人，使用 `organization_leaders`（`orgType=business_unit`，`leaderType=head`）。
 
 **API**
 ```
-GET    /api/business-units?companyId=
-POST   /api/business-units   { name, code, companyId, managerId? }
+GET    /api/business-units
+POST   /api/business-units   { name, code, description?, headUserId? }
 PUT    /api/business-units/:id
 DELETE /api/business-units/:id
 ```
 
-### 3.5 項目管理 `/system/org/projects`
+### 3.4 項目管理 `/system/org/projects`
 **資料表：** `projects`
-**欄位：** 項目名稱（中/英）、項目代碼、所屬公司/BU、項目負責人、開始日期、結束日期、狀態
+**欄位：** 項目名稱、代碼（如 YL / LY / MP）、所屬事業部、**項目負責人**（`projectOwnerUserId`，選填）、開始/結束日期、狀態
+
+> 若需多位負責人，使用 `organization_leaders`（`orgType=project`，`leaderType=owner`）。
 
 **API**
 ```
-GET    /api/projects?companyId=&status=
-POST   /api/projects   { name, code, companyId, businessUnitId?, managerId, startDate, endDate? }
+GET    /api/projects?businessUnitId=&status=
+POST   /api/projects   { name, code, businessUnitId?, projectOwnerUserId?, startDate, endDate? }
 PUT    /api/projects/:id
 DELETE /api/projects/:id
 ```
 
-### 3.6 職位管理 `/system/org/positions`
+### 3.5 部門管理 `/system/org/departments`
+**資料表：** `departments`
+
+**雙組織線欄位：**
+- `companyId`（選填）：辦公室組織線，部門屬於某公司
+- `projectId`（選填）：集團業務線，部門屬於某項目（如 MP/遊戲前端部門）
+- `managerUserId`（選填）：部門主管（單一；多主管用 `organization_leaders`）
+- `parentDepartmentId`（選填）：父部門（支援多層樹狀）
+
+> 每個部門至少需要 `companyId` 或 `projectId` 其中一個。兩個都有時代表該部門同時對應兩條組織線。
+
+支援樹狀結構，可顯示部門層級。
+
+**API**
+```
+GET    /api/departments?companyId=&projectId=
+GET    /api/departments/tree?companyId=&projectId=
+POST   /api/departments   { name, code, companyId?, projectId?, parentId?, managerUserId? }
+PUT    /api/departments/:id
+DELETE /api/departments/:id
+```
+
+### 3.6 組織負責人管理 `/system/org/leaders`
+**資料表：** `organization_leaders`
+
+支援一人同時擔任多個項目/部門負責人，並記錄歷史。
+
+**欄位：** orgType（business_unit / project / department）、orgId、userId、leaderType（head / owner / manager / deputy）、isPrimary、生效/失效日期
+
+**leaderType 說明：**
+| leaderType | 對應 | 用於審批節點解析 |
+|------------|------|------------------|
+| `head` | 事業部負責人 | `approverType=business_unit_head` |
+| `owner` | 項目負責人 | `approverType=project_owner` |
+| `manager` | 部門主管 | `approverType=department_manager` |
+| `deputy` | 代理負責人 | 暫代上述任一角色 |
+
+**API**
+```
+GET    /api/org-leaders?orgType=&orgId=
+GET    /api/org-leaders?userId=         (查詢某人的所有負責人角色)
+POST   /api/org-leaders   { orgType, orgId, userId, leaderType, isPrimary, startedAt, endedAt? }
+PUT    /api/org-leaders/:id
+DELETE /api/org-leaders/:id             (軟停用 isActive=false)
+```
+
+### 3.7 職位管理 `/system/org/positions`
 **資料表：** `positions`
 **欄位：** 職位名稱（中/英）、職位代碼、所屬公司（可共用）、職位類別（管理/技術/行政等）
 
@@ -294,39 +341,64 @@ DELETE /api/job-levels/:id
 ## 四、審批流設定 `/system/workflows`
 
 ### 功能概述
-設定各類表單（請假/加班/採購/報銷等）的審批流程模板。
+設定各類表單的審批流程模板，支援依組織結構動態解析審批人。
 
-### 審批流模板
+### 審批路徑類型（`approvalRouteType`）
 
-**模板屬性**
-- 表單類型（`form_type`）：leave / overtime / clock_patch / purchase_request / reimbursement
-- 名稱（可有多個模板，按條件匹配）
-- 適用範圍（全域/指定公司/指定部門）
-- 金額區間（財務表單用）
-- 是否啟用
+| 類型 | 說明 | 適用場景 |
+|------|------|----------|
+| `office_org` | 依地區/公司辦公室組織線 | 薪資申請、當地人事/財務/行政流程 |
+| `group_org` | 依事業部/項目/部門集團業務線 | 項目成本、資源申請、跨公司項目協作 |
+| `mixed` | 混合模式，各節點可指定不同組織來源 | 跨公司人事異動、薪資成本分攤申請 |
+| `custom` | 自訂固定審批人或角色（預設） | 簡單流程或特殊需求 |
 
-**審批節點（`approval_template_steps`）**
-- 節點順序（`stepOrder`）
-- 節點名稱
-- 審批人設定：
-  - 固定角色（如 `HR_ADMIN`）
-  - 動態角色（如 `direct_manager` 直屬主管、`dept_head` 部門主管）
-  - 固定人員（指定 userId）
-- 通過規則：all（全員同意）/ any（任一人同意）/ majority（多數同意）
-- 是否允許退回
+### 審批模板屬性
+- 表單類型（`formType`）：leave / overtime / clock_patch / purchase_request / reimbursement / oa_asset_request / meal_allowance / it_request / headcount_request / resignation / business_trip / payroll_request
+- 審批路徑類型（`approvalRouteType`）
+- 適用範圍：地區 / 公司 / 事業部 / **項目** / 部門（全部可選，null = 全域）
+- 金額門檻（`minAmount` / `maxAmount`，財務表單用）
+- 優先序（`priority`，數字越小越優先，多個模板匹配時取最小值）
 
-**審批流範例：請假申請**
+### 審批節點審批人類型（`approverType`）
+
+| approverType | 解析來源 | 說明 |
+|---|---|---|
+| `applicant_direct_manager` | `user_org_assignments.directManagerUserId` | 申請人直屬主管 |
+| `department_manager` | `organization_leaders`（leaderType=manager） | 部門主管 |
+| `project_owner` | `organization_leaders`（leaderType=owner） | 項目負責人 |
+| `business_unit_head` | `organization_leaders`（leaderType=head） | 事業部負責人 |
+| `company_hr` | `user_roles`（roleCode=HR_ADMIN，scopeId=companyId） | 公司 HR |
+| `company_finance` | `user_roles`（roleCode=FINANCE_ADMIN，scopeId=companyId） | 公司財務 |
+| `company_head` | `user_roles`（roleCode=COMPANY_HEAD，scopeId=companyId） | 公司負責人 |
+| `role` | `approverRoleCode` | 指定角色（任一持有人） |
+| `user` | `approverUserId` | 指定固定人員 |
+| `dynamic` | 業務規則腳本 | 依額外規則動態解析 |
+| `form_field_user` | 表單欄位 | 從表單內容指定欄位取得 userId |
+
+> **解析失敗規則**：送出前若必要節點找不到審批人（如部門未設主管、項目未設負責人），系統阻止送出並提示缺少哪類設定。
+
+### 審批流範例
+
+**請假申請（group_org）**
 ```
-Step 1: 直屬主管（dynamic: direct_manager）— any
-Step 2: HR 確認（role: HR_ADMIN）— any
+Step 1: applicant_direct_manager（直屬主管）— any
+Step 2: company_hr（公司 HR）             — any（請假 > 3 天時加入）
 ```
 
-**審批流範例：採購申請（金額 > 10萬）**
+**採購申請（group_org，金額 > 10萬）**
 ```
-Step 1: 直屬主管（dynamic: direct_manager）— any
-Step 2: 部門主管（dynamic: dept_head）— any
-Step 3: 財務複核（role: FINANCE_ADMIN）— any
-Step 4: 總經理（fixed user: CEO）— any
+Step 1: applicant_direct_manager — any
+Step 2: department_manager       — any
+Step 3: project_owner            — any
+Step 4: business_unit_head       — any
+Step 5: company_finance          — any
+```
+
+**薪資申請（mixed）**
+```
+Step 1: company_hr      (office_org) — any
+Step 2: company_finance (office_org) — any
+Step 3: business_unit_head (group_org) — any
 ```
 
 ### API
@@ -423,14 +495,16 @@ GET  /api/audit-logs/:id
 
 ```
 1. 地區 (regions)
-2. 公司 (companies)        ← 需要 regionId
-3. 部門 (departments)      ← 需要 companyId
-4. 業務單位 (business_units) ← 需要 companyId
-5. 項目 (projects)         ← 需要 companyId + businessUnitId
+2. 公司 (companies)              ← 需要 regionId
+3. 事業部 (business_units)       ← 獨立建立
+4. 項目 (projects)               ← 需要 businessUnitId（可選）
+5. 部門 (departments)            ← 需要 companyId 或 projectId（至少一個）
 6. 職位 (positions)
 7. 職級 (job_levels)
-8. 員工 (users + employee_profiles) ← 需要上述全部
-9. 組織配置 (user_org_assignments) ← 需要員工 + 部門 + 職位 + 職級
+8. 員工 (users + employee_profiles)
+9. 員工組織配置 (user_org_assignments) ← 需要員工 + 地區 + 公司 + 事業部 + 項目 + 部門 + 職位 + 職級
+10. 組織負責人 (organization_leaders)   ← 需要員工 + 事業部 / 項目 / 部門
+11. 員工成本分攤 (employee_cost_allocations) ← 需要員工 + 組織完整
 ```
 
 ---
@@ -439,7 +513,8 @@ GET  /api/audit-logs/:id
 
 | Phase | 功能 |
 |-------|------|
-| Phase 1 | 組織架構（地區/公司/部門/BU/項目/職位/職級）、帳號管理、角色與權限基礎 |
-| Phase 2 | 審批流設定（模板 + 節點配置）、稽核日誌 |
-| Phase 3 | 使用者角色指派（含 Scope）、權限細粒度管理 |
-| Phase 4 | 模塊設定、通知設定、系統設定 |
+| Phase 1 | 地區/公司/事業部/項目/部門/職位/職級（雙組織線），帳號管理，角色與權限基礎 |
+| Phase 2 | 組織負責人管理，員工組織配置（含 assignmentType / regionId），審批流設定（含 approvalRouteType + 動態 approverType） |
+| Phase 3 | 使用者角色指派（含 Scope），審批人解析引擎，稽核日誌 |
+| Phase 4 | 員工成本分攤，薪資成本分攤快照，財務成本報表維度 |
+| Phase 5 | 模塊設定，通知設定，系統設定 |

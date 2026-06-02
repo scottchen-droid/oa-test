@@ -22,12 +22,15 @@ model Region {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  companies             Company[]
-  approvalTemplates     ApprovalTemplate[]
-  purchaseAllocations   PurchaseRequestAllocation[]
-  reimbursementRequests ReimbursementRequest[]
-  leavePolicies         LeavePolicies[]
-  publicHolidays        PublicHoliday[]
+  companies               Company[]
+  approvalTemplates       ApprovalTemplate[]
+  purchaseAllocations     PurchaseRequestAllocation[]
+  reimbursementRequests   ReimbursementRequest[]
+  leavePolicies           LeavePolicies[]
+  publicHolidays          PublicHoliday[]
+  userOrgAssignments      UserOrgAssignment[]
+  employeeCostAllocations EmployeeCostAllocation[]
+  payrollCostAllocations  PayrollCostAllocationSnapshot[]
 
   @@map("regions")
 }
@@ -45,77 +48,94 @@ model Company {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  region                Region                @relation(fields: [regionId], references: [id])
-  departments           Department[]
-  positions             Position[]
-  userOrgAssignments    UserOrgAssignment[]
-  purchaseRequests      PurchaseRequest[]
-  purchaseAllocations   PurchaseRequestAllocation[]
-  reimbursementRequests ReimbursementRequest[]
-  approvalTemplates     ApprovalTemplate[]
-  leavePolicies         LeavePolicies[]
-  publicHolidays        PublicHoliday[]
+  region                  Region                @relation(fields: [regionId], references: [id])
+  departments             Department[]
+  positions               Position[]
+  userOrgAssignments      UserOrgAssignment[]
+  purchaseRequests        PurchaseRequest[]
+  purchaseAllocations     PurchaseRequestAllocation[]
+  reimbursementRequests   ReimbursementRequest[]
+  approvalTemplates       ApprovalTemplate[]
+  leavePolicies           LeavePolicies[]
+  publicHolidays          PublicHoliday[]
+  employeeCostAllocations EmployeeCostAllocation[]
+  payrollCostAllocations  PayrollCostAllocationSnapshot[]
 
   @@map("companies")
 }
 
-/// 部門，隸屬於公司，支援無限層級父子樹狀結構
+/// 部門（支援兩條組織線：companyId=辦公室組織線；projectId=集團業務組織線）
 model Department {
   id                 String   @id @default(uuid()) @db.Uuid  // 主鍵 UUID
-  companyId          String   @db.Uuid                        // 所屬公司 ID → Company
+  companyId          String?  @db.Uuid                        // 所屬公司（辦公室組織線，選填）→ Company
+  projectId          String?  @db.Uuid                        // 所屬項目（集團業務組織線，選填）→ Project
   parentDepartmentId String?  @db.Uuid                        // 父部門 ID（null 表示頂層部門）
-  code               String   @db.VarChar(50)                 // 部門代碼，在同一公司內唯一
+  code               String   @db.VarChar(50)                 // 部門代碼
   name               String   @db.VarChar(150)                // 部門名稱
+  managerUserId      String?  @db.Uuid                        // 部門主管（選填，多主管用 OrganizationLeader）→ User
   isActive           Boolean  @default(true)                  // 是否啟用（軟刪除）
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  company             Company     @relation(fields: [companyId], references: [id])
-  parent              Department? @relation("DepartmentChildren", fields: [parentDepartmentId], references: [id])
-  children            Department[] @relation("DepartmentChildren")
-  userOrgAssignments  UserOrgAssignment[]
-  purchaseRequests    PurchaseRequest[]
-  purchaseAllocations PurchaseRequestAllocation[]
-  approvalTemplates   ApprovalTemplate[]
+  company                 Company?     @relation(fields: [companyId], references: [id])
+  project                 Project?     @relation(fields: [projectId], references: [id])
+  manager                 User?        @relation("DepartmentManager", fields: [managerUserId], references: [id])
+  parent                  Department?  @relation("DepartmentChildren", fields: [parentDepartmentId], references: [id])
+  children                Department[] @relation("DepartmentChildren")
+  userOrgAssignments      UserOrgAssignment[]
+  purchaseRequests        PurchaseRequest[]
+  purchaseAllocations     PurchaseRequestAllocation[]
+  approvalTemplates       ApprovalTemplate[]
+  employeeCostAllocations EmployeeCostAllocation[]
+  payrollCostAllocations  PayrollCostAllocationSnapshot[]
 
-  @@unique([companyId, code])  // 同一公司內部門代碼不重複
   @@map("departments")
 }
 
-/// 事業部（跨公司的業務維度），例如 IT事業部、財務事業部
+/// 事業部（集團業務組織第一層），例如 第一事業部、研發中心
 model BusinessUnit {
   id          String   @id @default(uuid()) @db.Uuid  // 主鍵 UUID
   code        String   @unique @db.VarChar(50)         // 事業部代碼，全域唯一
   name        String   @db.VarChar(150)                // 事業部名稱
   description String?                                  // 事業部描述
+  headUserId  String?  @db.Uuid                        // 事業部負責人（選填，多負責人用 OrganizationLeader）→ User
   isActive    Boolean  @default(true)                  // 是否啟用（軟刪除）
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  projects            Project[]
-  userOrgAssignments  UserOrgAssignment[]
-  purchaseAllocations PurchaseRequestAllocation[]
-  approvalTemplates   ApprovalTemplate[]
+  headUser                User?                        @relation("BusinessUnitHead", fields: [headUserId], references: [id])
+  projects                Project[]
+  userOrgAssignments      UserOrgAssignment[]
+  purchaseAllocations     PurchaseRequestAllocation[]
+  approvalTemplates       ApprovalTemplate[]
+  employeeCostAllocations EmployeeCostAllocation[]
+  payrollCostAllocations  PayrollCostAllocationSnapshot[]
 
   @@map("business_units")
 }
 
-/// 項目，可選擇性隸屬於某個事業部
+/// 項目（集團業務組織第二層），隸屬於事業部，如 YL、LY、MP
 model Project {
-  id             String    @id @default(uuid()) @db.Uuid  // 主鍵 UUID
-  businessUnitId String?   @db.Uuid                        // 所屬事業部 ID（可選）→ BusinessUnit
-  code           String    @unique @db.VarChar(50)         // 項目代碼，全域唯一
-  name           String    @db.VarChar(150)                // 項目名稱
-  description    String?                                   // 項目描述
-  startDate      DateTime? @db.Date                        // 項目開始日期
-  endDate        DateTime? @db.Date                        // 項目結束日期（null 表示未設定）
-  isActive       Boolean   @default(true)                  // 是否啟用（軟刪除）
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                   String    @id @default(uuid()) @db.Uuid  // 主鍵 UUID
+  businessUnitId       String?   @db.Uuid                        // 所屬事業部（可選）→ BusinessUnit
+  code                 String    @unique @db.VarChar(50)         // 項目代碼，全域唯一，如 YL / LY / MP
+  name                 String    @db.VarChar(150)                // 項目名稱
+  description          String?                                   // 項目描述
+  projectOwnerUserId   String?   @db.Uuid                        // 項目負責人（選填，多負責人用 OrganizationLeader）→ User
+  startDate            DateTime? @db.Date                        // 項目開始日期
+  endDate              DateTime? @db.Date                        // 項目結束日期（null 表示未設定）
+  isActive             Boolean   @default(true)                  // 是否啟用（軟刪除）
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  businessUnit        BusinessUnit?            @relation(fields: [businessUnitId], references: [id])
-  userOrgAssignments  UserOrgAssignment[]
-  purchaseAllocations PurchaseRequestAllocation[]
+  businessUnit            BusinessUnit?            @relation(fields: [businessUnitId], references: [id])
+  projectOwner            User?                    @relation("ProjectOwner", fields: [projectOwnerUserId], references: [id])
+  departments             Department[]
+  userOrgAssignments      UserOrgAssignment[]
+  purchaseAllocations     PurchaseRequestAllocation[]
+  approvalTemplates       ApprovalTemplate[]
+  employeeCostAllocations EmployeeCostAllocation[]
+  payrollCostAllocations  PayrollCostAllocationSnapshot[]
 
   @@map("projects")
 }
@@ -193,6 +213,14 @@ model User {
   orgAssignments         UserOrgAssignment[]
   // 作為直屬主管被其他人指向
   managedAssignments     UserOrgAssignment[]    @relation("DirectManager")
+  // 組織負責人角色（事業部負責人 / 項目負責人 / 部門主管）
+  headedBusinessUnits    BusinessUnit[]         @relation("BusinessUnitHead")
+  ownedProjects          Project[]              @relation("ProjectOwner")
+  managedDepartments     Department[]           @relation("DepartmentManager")
+  organizationLeaderRoles OrganizationLeader[]
+  // 成本分攤
+  employeeCostAllocations EmployeeCostAllocation[]
+  payrollCostAllocations  PayrollCostAllocationSnapshot[]
 
   // RBAC：角色指派（透過中間表 UserRole）
   userRoles              UserRole[]
@@ -238,24 +266,28 @@ model User {
   @@map("users")
 }
 
-/// 員工組織歸屬紀錄（一個員工可同時有多個歸屬，isPrimary=true 為主要歸屬）
+/// 員工組織歸屬（同時記錄辦公室組織線與集團業務組織線，支援多筆兼任）
 model UserOrgAssignment {
   id                  String    @id @default(uuid()) @db.Uuid  // 主鍵 UUID
   userId              String    @db.Uuid                        // 員工 ID → User
-  companyId           String?   @db.Uuid                        // 所屬公司（可選）→ Company
+  regionId            String?   @db.Uuid                        // 所屬地區（辦公室線，可選）→ Region
+  companyId           String?   @db.Uuid                        // 所屬公司（辦公室線，可選）→ Company
   departmentId        String?   @db.Uuid                        // 所屬部門（可選）→ Department
-  businessUnitId      String?   @db.Uuid                        // 所屬事業部（可選）→ BusinessUnit
-  projectId           String?   @db.Uuid                        // 所屬項目（可選）→ Project
+  businessUnitId      String?   @db.Uuid                        // 所屬事業部（集團線，可選）→ BusinessUnit
+  projectId           String?   @db.Uuid                        // 所屬項目（集團線，可選）→ Project
   positionId          String?   @db.Uuid                        // 擔任職位（可選）→ Position
   jobLevelId          String?   @db.Uuid                        // 職級（可選）→ JobLevel
-  directManagerUserId String?   @db.Uuid                        // 直屬主管 User ID（可選）→ User
+  directManagerUserId String?   @db.Uuid                        // 直屬主管（可選）→ User
   isPrimary           Boolean   @default(false)                 // 是否為主要歸屬（每人只能有一個 primary）
+  assignmentType      String    @default("primary") @db.VarChar(30) // 歸屬類型：primary / secondary / temporary
   startedAt           DateTime? @db.Date                        // 此歸屬開始日期
   endedAt             DateTime? @db.Date                        // 此歸屬結束日期（null 表示仍有效）
+  isActive            Boolean   @default(true)                  // 是否啟用（軟停用不影響歷史）
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
   user          User          @relation(fields: [userId], references: [id])
+  region        Region?       @relation(fields: [regionId], references: [id])
   company       Company?      @relation(fields: [companyId], references: [id])
   department    Department?   @relation(fields: [departmentId], references: [id])
   businessUnit  BusinessUnit? @relation(fields: [businessUnitId], references: [id])
@@ -529,28 +561,31 @@ model Attachment {
 //       ApprovalStep（步驟）→ ApprovalAction（操作紀錄）
 // ═══════════════════════════════════════════════
 
-/// 審批流程模板（可依 formType / 金額區間 / 所屬公司部門設定不同模板）
+/// 審批流程模板（可依 formType / 審批路徑 / 金額區間 / 所屬組織設定不同模板）
 model ApprovalTemplate {
-  id             String    @id @default(uuid()) @db.Uuid
-  code           String    @unique @db.VarChar(50)         // 模板代碼
-  name           String    @db.VarChar(150)                // 模板名稱
-  formType       String    @db.VarChar(50)                 // 適用表單類型：purchase_request / reimbursement / leave
-  regionId       String?   @db.Uuid                        // 適用地區（null=全域）
-  companyId      String?   @db.Uuid                        // 適用公司（null=全域）
-  departmentId   String?   @db.Uuid                        // 適用部門（null=全域）
-  businessUnitId String?   @db.Uuid                        // 適用事業部（null=全域）
-  minAmount      Decimal?  @db.Decimal(18, 2)              // 適用最低金額（null=不限）
-  maxAmount      Decimal?  @db.Decimal(18, 2)              // 適用最高金額（null=不限）
-  currencyCode   String?   @db.VarChar(10)
-  priority       Int       @default(100)                   // 優先序，數字越小越優先
-  isActive       Boolean   @default(true)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                 String    @id @default(uuid()) @db.Uuid
+  code               String    @unique @db.VarChar(50)         // 模板代碼
+  name               String    @db.VarChar(150)                // 模板名稱
+  formType           String    @db.VarChar(100)                // 適用表單類型：purchase_request / reimbursement / leave / overtime 等
+  approvalRouteType  String    @default("custom") @db.VarChar(50) // 審批路徑：office_org / group_org / mixed / custom
+  regionId           String?   @db.Uuid                        // 適用地區（null=全域）
+  companyId          String?   @db.Uuid                        // 適用公司（null=全域）
+  businessUnitId     String?   @db.Uuid                        // 適用事業部（null=全域）
+  projectId          String?   @db.Uuid                        // 適用項目（null=全域）
+  departmentId       String?   @db.Uuid                        // 適用部門（null=全域）
+  minAmount          Decimal?  @db.Decimal(18, 2)              // 適用最低金額（null=不限）
+  maxAmount          Decimal?  @db.Decimal(18, 2)              // 適用最高金額（null=不限）
+  currencyCode       String?   @db.VarChar(10)
+  priority           Int       @default(100)                   // 優先序，數字越小越優先；多個模板匹配時取最小優先序
+  isActive           Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   region       Region?       @relation(fields: [regionId], references: [id])
   company      Company?      @relation(fields: [companyId], references: [id])
-  department   Department?   @relation(fields: [departmentId], references: [id])
   businessUnit BusinessUnit? @relation(fields: [businessUnitId], references: [id])
+  project      Project?      @relation(fields: [projectId], references: [id])
+  department   Department?   @relation(fields: [departmentId], references: [id])
   steps        ApprovalTemplateStep[]
   ccUsers      ApprovalTemplateCcUser[]
   instances    ApprovalInstance[]
@@ -580,9 +615,19 @@ model ApprovalTemplateStep {
 model ApprovalTemplateStepApprover {
   id                     String   @id @default(uuid()) @db.Uuid
   approvalTemplateStepId String   @db.Uuid
-  approverType           String   @db.VarChar(50)   // 審核人類型：user=指定人員 / role=角色 / direct_manager=直屬主管
+  approverType           String   @db.VarChar(100)  // 審核人類型：
+                                                    // user=指定人員 / role=指定角色
+                                                    // applicant_direct_manager=申請人直屬主管
+                                                    // department_manager=部門主管（依 OrganizationLeader 解析）
+                                                    // project_owner=項目負責人（依 OrganizationLeader 解析）
+                                                    // business_unit_head=事業部負責人（依 OrganizationLeader 解析）
+                                                    // company_hr=公司 HR 角色人員
+                                                    // company_finance=公司財務角色人員
+                                                    // company_head=公司負責人角色人員
+                                                    // dynamic=依規則動態解析
+                                                    // form_field_user=從表單欄位取得
   approverUserId         String?  @db.Uuid           // 指定審核人（approverType=user 時使用）
-  approverRoleCode       String?  @db.VarChar(100)   // 審核角色代碼（approverType=role 時使用）
+  approverRoleCode       String?  @db.VarChar(100)   // 審核角色代碼（approverType=role/company_* 時使用）
   createdAt              DateTime @default(now())
 
   step     ApprovalTemplateStep @relation(fields: [approvalTemplateStepId], references: [id])
@@ -1001,7 +1046,8 @@ model PayrollPeriod {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  payrollRecords PayrollRecord[]
+  payrollRecords         PayrollRecord[]
+  payrollCostAllocations PayrollCostAllocationSnapshot[]
 
   @@unique([year, month])
   @@map("payroll_periods")
@@ -1030,9 +1076,10 @@ model PayrollRecord {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  payrollPeriod   PayrollPeriod    @relation(fields: [payrollPeriodId], references: [id])
-  user            User             @relation(fields: [userId], references: [id])
-  salaryStructure SalaryStructure? @relation(fields: [salaryStructureId], references: [id])
+  payrollPeriod          PayrollPeriod    @relation(fields: [payrollPeriodId], references: [id])
+  user                   User             @relation(fields: [userId], references: [id])
+  salaryStructure        SalaryStructure? @relation(fields: [salaryStructureId], references: [id])
+  payrollCostAllocations PayrollCostAllocationSnapshot[]
 
   @@unique([payrollPeriodId, userId])
   @@map("payroll_records")
@@ -1159,6 +1206,92 @@ model AnnouncementTag {
 }
 
 // ═══════════════════════════════════════════════
+// 組織負責人（支援一人擔任多個項目/部門負責人）
+// ═══════════════════════════════════════════════
+
+/// 組織負責人關聯表（事業部負責人 / 項目負責人 / 部門主管，支援多對多）
+model OrganizationLeader {
+  id          String    @id @default(uuid()) @db.Uuid
+  orgType     String    @db.VarChar(50)    // 組織類型：business_unit / project / department
+  orgId       String    @db.Uuid           // 組織 ID（對應 business_units / projects / departments 的 id）
+  userId      String    @db.Uuid           // 負責人 → User
+  leaderType  String    @db.VarChar(50)    // 負責人類型：head=事業部負責人 / owner=項目負責人 / manager=部門主管 / deputy=代理
+  isPrimary   Boolean   @default(true)     // 是否為主要負責人
+  startedAt   DateTime? @db.Date           // 開始日期
+  endedAt     DateTime? @db.Date           // 結束日期（null=目前有效）
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([orgType, orgId])               // 依組織類型 + ID 快速查詢
+  @@index([userId])
+  @@map("organization_leaders")
+}
+
+// ═══════════════════════════════════════════════
+// 員工成本分攤
+// ═══════════════════════════════════════════════
+
+/// 員工成本分攤設定（薪資成本可分攤至多個項目，同一期間比例加總必須為 100%）
+model EmployeeCostAllocation {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @db.Uuid               // 員工 → User
+  regionId          String?   @db.Uuid               // 成本歸屬地區（可選）→ Region
+  companyId         String?   @db.Uuid               // 成本歸屬公司（可選）→ Company
+  businessUnitId    String?   @db.Uuid               // 成本歸屬事業部（可選）→ BusinessUnit
+  projectId         String?   @db.Uuid               // 成本歸屬項目（可選）→ Project
+  departmentId      String?   @db.Uuid               // 成本歸屬部門（可選）→ Department
+  allocationPercent Decimal   @db.Decimal(5, 2)      // 分攤比例（0.00–100.00），同期間加總必須 = 100
+  startedAt         DateTime  @db.Date               // 生效日期
+  endedAt           DateTime? @db.Date               // 失效日期（null=目前有效）
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id])
+  region       Region?       @relation(fields: [regionId], references: [id])
+  company      Company?      @relation(fields: [companyId], references: [id])
+  businessUnit BusinessUnit? @relation(fields: [businessUnitId], references: [id])
+  project      Project?      @relation(fields: [projectId], references: [id])
+  department   Department?   @relation(fields: [departmentId], references: [id])
+
+  @@index([userId, startedAt])
+  @@map("employee_cost_allocations")
+}
+
+/// 薪資成本分攤快照（薪資期別確認後鎖定，不受後續組織異動影響）
+model PayrollCostAllocationSnapshot {
+  id                String   @id @default(uuid()) @db.Uuid
+  payrollPeriodId   String   @db.Uuid               // 薪資期別 → PayrollPeriod
+  payrollRecordId   String   @db.Uuid               // 薪資紀錄 → PayrollRecord
+  userId            String   @db.Uuid               // 員工 → User
+  regionId          String?  @db.Uuid               // 成本歸屬地區（快照）
+  companyId         String?  @db.Uuid               // 成本歸屬公司（快照）
+  businessUnitId    String?  @db.Uuid               // 成本歸屬事業部（快照）
+  projectId         String?  @db.Uuid               // 成本歸屬項目（快照）
+  departmentId      String?  @db.Uuid               // 成本歸屬部門（快照）
+  allocationPercent Decimal  @db.Decimal(5, 2)      // 分攤比例（快照）
+  allocatedAmount   Decimal  @db.Decimal(18, 2)     // 分攤金額（= 淨薪資 × 比例）
+  currencyCode      String   @db.VarChar(10)        // 幣別
+  createdAt         DateTime @default(now())
+
+  payrollPeriod  PayrollPeriod  @relation(fields: [payrollPeriodId], references: [id])
+  payrollRecord  PayrollRecord  @relation(fields: [payrollRecordId], references: [id])
+  user           User           @relation(fields: [userId], references: [id])
+  region         Region?        @relation(fields: [regionId], references: [id])
+  company        Company?       @relation(fields: [companyId], references: [id])
+  businessUnit   BusinessUnit?  @relation(fields: [businessUnitId], references: [id])
+  project        Project?       @relation(fields: [projectId], references: [id])
+  department     Department?    @relation(fields: [departmentId], references: [id])
+
+  @@index([payrollPeriodId, userId])
+  @@index([projectId])
+  @@map("payroll_cost_allocation_snapshots")
+}
+
+// ═══════════════════════════════════════════════
 // 系統稽核日誌
 // ═══════════════════════════════════════════════
 
@@ -1169,7 +1302,7 @@ model AnnouncementTag {
 /// OA 通用電子表單申請（支援多種表單類型，欄位以 JSONB 儲存）
 model OaFormRequest {
   id              String   @id @default(uuid()) @db.Uuid
-  formType        String   @db.VarChar(50)                      // asset_request | meal_allowance | it_request | headcount_request | resignation
+  formType        String   @db.VarChar(100)                     // purchase_request | business_trip | asset_request | meal_allowance | it_request | headcount_request | resignation | leave_without_pay | payroll_request
   submitterUserId String   @db.Uuid
   content         Json     @default("{}")                        // 各表單類型的欄位（JSONB）
   status          String   @default("pending") @db.VarChar(30)  // pending | approved | rejected | canceled

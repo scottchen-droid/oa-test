@@ -31,7 +31,49 @@
       @closed="resetForm"
     >
       <el-form ref="formRef" :model="formData" :rules="activeRules" label-width="110px">
-        <template v-if="activeFormType?.type === 'asset_request'">
+        <template v-if="activeFormType?.type === 'purchase_request'">
+          <el-form-item label="採購品項" prop="itemName">
+            <el-input v-model="formData.itemName" placeholder="如：筆記型電腦、辦公桌椅" />
+          </el-form-item>
+          <el-form-item label="數量" prop="quantity">
+            <el-input-number v-model="formData.quantity" :min="1" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="預估金額（元）" prop="estimatedAmount">
+            <el-input-number v-model="formData.estimatedAmount" :min="0" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="供應商" prop="vendor">
+            <el-input v-model="formData.vendor" placeholder="供應商名稱（選填）" />
+          </el-form-item>
+          <el-form-item label="預計交貨日期" prop="expectedDate">
+            <el-date-picker v-model="formData.expectedDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="採購原因" prop="reason">
+            <el-input v-model="formData.reason" type="textarea" :rows="3" placeholder="說明採購用途及必要性" />
+          </el-form-item>
+        </template>
+
+        <template v-else-if="activeFormType?.type === 'business_trip'">
+          <el-form-item label="出差目的地" prop="destination">
+            <el-input v-model="formData.destination" placeholder="如：台北、上海、東京" />
+          </el-form-item>
+          <el-form-item label="出差開始日期" prop="startDate">
+            <el-date-picker v-model="formData.startDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="出差結束日期" prop="endDate">
+            <el-date-picker v-model="formData.endDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="出差目的" prop="purpose">
+            <el-input v-model="formData.purpose" type="textarea" :rows="3" placeholder="說明出差目的及預期成果" />
+          </el-form-item>
+          <el-form-item label="預估差旅費（元）" prop="estimatedBudget">
+            <el-input-number v-model="formData.estimatedBudget" :min="0" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="需要住宿" prop="needAccommodation">
+            <el-switch v-model="formData.needAccommodation" />
+          </el-form-item>
+        </template>
+
+        <template v-else-if="activeFormType?.type === 'asset_request'">
           <el-form-item label="資產類型" prop="assetType">
             <el-input v-model="formData.assetType" placeholder="如：筆電、螢幕、辦公椅" />
           </el-form-item>
@@ -120,15 +162,17 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Briefcase, Money, Monitor, User, Remove } from '@element-plus/icons-vue'
+import { Briefcase, Money, Monitor, User, Remove, ShoppingCart, Suitcase } from '@element-plus/icons-vue'
 import { formsApi } from '@/api/forms.api'
 import { useUiStore } from '@/stores/ui.store'
 
 const ui = useUiStore()
-ui.setBreadcrumbs([{ title: '電子表單' }, { title: '電子表單申請' }])
+ui.setBreadcrumbs([{ title: '電子表單' }, { title: '申請' }])
 
 const formTypes = [
-  { type: 'asset_request', label: 'OA資產申請單', desc: '申請辦公室資產設備', icon: 'Briefcase', color: '#409eff' },
+  { type: 'purchase_request', label: '採購申請', desc: '採購物品或服務申請', icon: 'ShoppingCart', color: '#409eff' },
+  { type: 'business_trip', label: '出差申請', desc: '國內外出差差旅申請', icon: 'Suitcase', color: '#1abc9c' },
+  { type: 'asset_request', label: 'OA資產申請單', desc: '申請辦公室資產設備', icon: 'Briefcase', color: '#3498db' },
   { type: 'meal_allowance', label: '誤餐費申請', desc: '加班誤餐費用補貼申請', icon: 'Money', color: '#67c23a' },
   { type: 'it_request', label: '資訊需求申請', desc: '資訊系統需求或IT支援', icon: 'Monitor', color: '#e6a23c' },
   { type: 'headcount_request', label: '人力需求申請', desc: '部門新增人力招募申請', icon: 'User', color: '#9b59b6' },
@@ -142,6 +186,18 @@ const activeFormType = ref<typeof formTypes[0] | null>(null)
 const formData = ref<Record<string, any>>({})
 
 const rulesMap: Record<string, FormRules> = {
+  purchase_request: {
+    itemName: [{ required: true, message: '請填寫採購品項', trigger: 'blur' }],
+    quantity: [{ required: true, message: '請填寫數量', trigger: 'change' }],
+    estimatedAmount: [{ required: true, message: '請填寫預估金額', trigger: 'change' }],
+    reason: [{ required: true, message: '請填寫採購原因', trigger: 'blur' }],
+  },
+  business_trip: {
+    destination: [{ required: true, message: '請填寫出差目的地', trigger: 'blur' }],
+    startDate: [{ required: true, message: '請選擇出差開始日期', trigger: 'change' }],
+    endDate: [{ required: true, message: '請選擇出差結束日期', trigger: 'change' }],
+    purpose: [{ required: true, message: '請填寫出差目的', trigger: 'blur' }],
+  },
   asset_request: {
     assetType: [{ required: true, message: '請填寫資產類型', trigger: 'blur' }],
     quantity: [{ required: true, message: '請填寫數量', trigger: 'change' }],
@@ -172,7 +228,7 @@ const activeRules = computed(() => activeFormType.value ? (rulesMap[activeFormTy
 
 function openDialog(ft: typeof formTypes[0]) {
   activeFormType.value = ft
-  formData.value = { quantity: 1, hours: 1, amount: 100, headcount: 1, priority: 'normal' }
+  formData.value = { quantity: 1, hours: 1, amount: 100, headcount: 1, priority: 'normal', estimatedAmount: 0, estimatedBudget: 0, needAccommodation: false }
   dialogVisible.value = true
 }
 

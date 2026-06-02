@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-const VALID_FORM_TYPES = ['asset_request', 'meal_allowance', 'it_request', 'headcount_request', 'resignation'];
+const VALID_FORM_TYPES = ['purchase_request', 'business_trip', 'asset_request', 'meal_allowance', 'it_request', 'headcount_request', 'resignation'];
 
 @Injectable()
 export class FormsService {

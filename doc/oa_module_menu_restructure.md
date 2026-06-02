@@ -181,12 +181,12 @@
 
 ## 5.2 個人功能結構
 
+> **調整說明：**
+> - 「個人中心」（通知、薪資明細）已移除：通知已整合至首頁快捷區；薪資明細暫不開放。
+> - 「登入記錄」已移至資訊中心底下。
+
 ```text
 個人
-│
-├── 個人中心
-│   ├── 通知
-│   └── 薪資明細
 │
 ├── 考勤管理
 │   ├── 打卡（上下班打卡 + 今日打卡時間，依線上打卡權限顯示）
@@ -194,12 +194,9 @@
 │   ├── 請假作業
 │   └── 加班申請
 │
-├── 帳號管理
-│   └── 登入記錄查詢
-│
 └── 電子表單
-    ├── 電子表單申請  → /home/forms/requests（頁面內以卡片列出各表單類型）
-    └── 電子表單簽核  → /home/forms/approvals（查看自己提交表單的審核狀況）
+    ├── 申請  → /home/forms/requests（頁面內以卡片列出所有可申請的表單類型）
+    └── 簽核  → /home/forms/approvals（查看自己提交表單的審核進度）
 ```
 
 ---
@@ -464,17 +461,19 @@
 
 | 側欄項目 | 路由 | 說明 |
 |----------|------|------|
-| 電子表單申請 | `/home/forms/requests` | 頁面內以卡片格式列出所有可申請的表單類型 |
-| 電子表單簽核 | `/home/forms/approvals` | 顯示員工自己提交的表單申請審核狀況 |
+| 申請 | `/home/forms/requests` | 頁面內以卡片格式列出所有可申請的表單類型 |
+| 簽核 | `/home/forms/approvals` | 顯示員工自己提交的表單申請審核進度 |
 
 > 新增表單類型只需在 `FormRequestsView.vue` 的 `formTypes` 陣列加入定義，無需新增路由或選單項目。
 
-## 8.3 初版電子表單清單
+## 8.3 電子表單清單
 
 目前 `oa_form_requests` 表支援以下 `formType`：
 
 | formType | 顯示名稱 | 主要欄位 |
 |----------|----------|----------|
+| `purchase_request` | 採購申請 | 採購品項、數量、預估金額、供應商、預計交貨日期、採購原因 |
+| `business_trip` | 出差申請 | 出差目的地、開始/結束日期、出差目的、預估差旅費、是否需住宿 |
 | `asset_request` | OA資產申請單 | 資產類型、數量、預計使用日期、申請原因 |
 | `meal_allowance` | 誤餐費申請 | 加班日期、加班時數、申請金額、備註 |
 | `it_request` | 資訊需求申請 | 需求標題、需求描述、優先程度、期望完成日期 |
@@ -486,8 +485,8 @@
 ## 8.4 電子表單 Route（簡化後）
 
 ```text
-/home/forms/requests                       電子表單申請（卡片選擇 + Dialog 填寫）
-/home/forms/approvals                      電子表單簽核（我的申請狀態）
+/home/forms/requests                       申請（卡片選擇 + Dialog 填寫）
+/home/forms/approvals                      簽核（我的申請審核進度）
 ```
 
 > 舊設計中每種表單各自一條 route（如 `/home/forms/resignation/new`）已廢棄，改為 Dialog 方式在同一頁面操作。
@@ -616,6 +615,7 @@
 公告
 組織圖
 系統訊息
+登入記錄
 ```
 
 ---
@@ -804,10 +804,6 @@ clock_patch
 ```text
 /home                                      首頁
 
-/home/personal/notifications               通知
-/home/personal/payslips                    薪資明細
-/home/personal/payslips/:periodId          薪資明細詳情
-
 /home/attendance/clock                     打卡（上下班 + 今日打卡時間）
 /home/attendance/records                   出勤紀錄（含補卡操作）
 /home/attendance/leaves                    請假作業
@@ -817,10 +813,8 @@ clock_patch
 /home/attendance/overtime/new              新增加班申請
 /home/attendance/overtime/:id              加班申請詳情
 
-/home/account/login-logs                   登入記錄查詢
-
-/home/forms/requests                       電子表單申請（卡片選擇 + Dialog 填寫）
-/home/forms/approvals                      電子表單簽核（我的申請審核狀況）
+/home/forms/requests                       申請（卡片選擇 + Dialog 填寫）
+/home/forms/approvals                      簽核（我的申請審核進度）
 
 /home/manager/approvals                    簽核（Tab 切換：請假/補卡/加班/電子表單）
 /home/manager/approvals/:id                簽核詳情
@@ -829,6 +823,7 @@ clock_patch
 /home/info/announcements/:id               公告詳情
 /home/info/org-chart                       組織圖
 /home/info/system-messages                 系統訊息
+/home/account/login-logs                   登入記錄（置於資訊中心底下）
 ```
 
 ---
@@ -1539,24 +1534,6 @@ export const homeMenu: MenuItem[] = [
         permissionCode: "module.home_personal.access",
         children: [
           {
-            key: "home-personal-center",
-            name: "個人中心",
-            children: [
-              {
-                key: "home-notifications",
-                name: "通知",
-                route: "/home/personal/notifications",
-                permissionCode: "home.personal.notification.view",
-              },
-              {
-                key: "home-payslips",
-                name: "薪資明細",
-                route: "/home/personal/payslips",
-                permissionCode: "home.personal.payslip.view_self",
-              },
-            ],
-          },
-          {
             key: "home-attendance",
             name: "考勤管理",
             children: [
@@ -1588,56 +1565,22 @@ export const homeMenu: MenuItem[] = [
             ],
           },
           {
-            key: "home-account",
-            name: "帳號管理",
-            children: [
-              {
-                key: "home-login-logs",
-                name: "登入記錄查詢",
-                route: "/home/account/login-logs",
-                permissionCode: "home.account.login_log.view_self",
-              },
-            ],
-          },
-          {
             key: "home-forms",
             name: "電子表單",
             children: [
               {
-                key: "form-leave-without-pay",
-                name: "留職停薪申請單",
-                route: "/home/forms/leave-without-pay/new",
+                key: "home-forms-requests",
+                name: "申請",
+                route: "/home/forms/requests",
                 permissionCode: "home.form.create",
+                // 頁面內以卡片呈現所有表單類型（採購申請、出差申請、OA資產申請、誤餐費、資訊需求、人力需求、離職）
               },
               {
-                key: "form-resignation",
-                name: "離職申請單",
-                route: "/home/forms/resignation/new",
-                permissionCode: "home.form.create",
-              },
-              {
-                key: "form-meal-allowance",
-                name: "誤餐費申請",
-                route: "/home/forms/meal-allowance/new",
-                permissionCode: "home.form.create",
-              },
-              {
-                key: "form-it-request",
-                name: "資訊需求申請單",
-                route: "/home/forms/it-request/new",
-                permissionCode: "home.form.create",
-              },
-              {
-                key: "form-oa-asset",
-                name: "OA 資產申請單",
-                route: "/home/forms/oa-asset-request/new",
-                permissionCode: "home.form.create",
-              },
-              {
-                key: "form-manpower",
-                name: "人力需求表單",
-                route: "/home/forms/manpower-request/new",
-                permissionCode: "home.form.create",
+                key: "home-forms-approvals",
+                name: "簽核",
+                route: "/home/forms/approvals",
+                permissionCode: "home.form.view_self",
+                // 顯示員工自己提交的表單審核進度
               },
             ],
           },
@@ -1680,6 +1623,12 @@ export const homeMenu: MenuItem[] = [
             name: "系統訊息",
             route: "/home/info/system-messages",
             permissionCode: "home.info.system_message.view",
+          },
+          {
+            key: "home-login-logs",
+            name: "登入記錄",
+            route: "/home/account/login-logs",
+            permissionCode: "home.account.login_log.view_self",
           },
         ],
       },

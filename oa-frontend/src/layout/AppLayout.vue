@@ -21,16 +21,6 @@
           <template #title>首頁</template>
         </el-menu-item>
 
-        <!-- 個人中心 -->
-        <el-sub-menu index="personal">
-          <template #title>
-            <el-icon><User /></el-icon>
-            <span>個人中心</span>
-          </template>
-          <el-menu-item index="/home/personal/notifications">我的通知</el-menu-item>
-          <el-menu-item index="/home/personal/payslips">我的薪資</el-menu-item>
-        </el-sub-menu>
-
         <!-- 考勤管理 -->
         <el-sub-menu index="attendance">
           <template #title>
@@ -49,15 +39,9 @@
             <el-icon><Document /></el-icon>
             <span>電子表單</span>
           </template>
-          <el-menu-item index="/home/forms/requests">電子表單申請</el-menu-item>
-          <el-menu-item index="/home/forms/approvals">電子表單簽核</el-menu-item>
+          <el-menu-item index="/home/forms/requests">申請</el-menu-item>
+          <el-menu-item index="/home/forms/approvals">簽核</el-menu-item>
         </el-sub-menu>
-
-        <!-- 登入記錄 -->
-        <el-menu-item index="/home/account/login-logs">
-          <el-icon><List /></el-icon>
-          <template #title>登入記錄</template>
-        </el-menu-item>
 
         <!-- 主管（僅管理者可見） -->
         <el-sub-menu v-if="auth.isManager" index="manager">
@@ -77,6 +61,7 @@
           <el-menu-item index="/home/info/announcements">公告</el-menu-item>
           <el-menu-item index="/home/info/org-chart">組織架構</el-menu-item>
           <el-menu-item index="/home/info/system-messages">系統訊息</el-menu-item>
+          <el-menu-item index="/home/account/login-logs">登入記錄</el-menu-item>
         </el-sub-menu>
 
         <el-divider style="margin: 8px 0; border-color: rgba(255,255,255,0.1)" />
@@ -201,7 +186,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import {
-  Monitor, House, User, Clock, Document, List, Avatar, InfoFilled,
+  Monitor, House, Clock, Document, Avatar, InfoFilled,
   UserFilled, Wallet, Files, Setting, Fold, Expand, ArrowDown,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth.store'

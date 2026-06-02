@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-header">
-      <h2>電子表單簽核</h2>
+      <h2>我的申請進度</h2>
     </div>
 
     <el-card>
@@ -57,7 +57,7 @@ const page = ref(1)
 const pageSize = 20
 
 onMounted(async () => {
-  ui.setBreadcrumbs([{ title: '電子表單' }, { title: '電子表單簽核' }])
+  ui.setBreadcrumbs([{ title: '電子表單' }, { title: '簽核' }])
   await loadList()
 })
 
@@ -78,6 +78,8 @@ async function loadList(p = 1) {
 }
 
 const formTypeMap: Record<string, string> = {
+  purchase_request: '採購申請',
+  business_trip: '出差申請',
   asset_request: 'OA資產申請',
   meal_allowance: '誤餐費申請',
   it_request: '資訊需求申請',
@@ -91,6 +93,8 @@ function formTypeLabel(type: string) {
 
 function formTypeTagColor(type: string): '' | 'success' | 'warning' | 'danger' | 'info' {
   const map: Record<string, '' | 'success' | 'warning' | 'danger' | 'info'> = {
+    purchase_request: '',
+    business_trip: 'success',
     asset_request: '',
     meal_allowance: 'success',
     it_request: 'warning',
@@ -123,6 +127,8 @@ function statusTagColor(status: string): '' | 'success' | 'warning' | 'danger' |
 function contentSummary(row: any): string {
   const c = row.content ?? {}
   switch (row.formType) {
+    case 'purchase_request': return `${c.itemName ?? '—'} × ${c.quantity ?? 1}，預估 NT$${c.estimatedAmount ?? '?'}`
+    case 'business_trip': return `${c.destination ?? '—'}，${c.startDate ?? '?'} ~ ${c.endDate ?? '?'}`
     case 'asset_request': return `${c.assetType ?? '—'} × ${c.quantity ?? 1}`
     case 'meal_allowance': return `${c.workDate ?? '—'} 加班 ${c.hours ?? '?'} 小時，申請 NT$${c.amount ?? '?'}`
     case 'it_request': return c.title ?? '—'
