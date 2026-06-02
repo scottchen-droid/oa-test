@@ -323,4 +323,113 @@ export class OrganizationsService {
   async deleteUserOrgAssignment(assignmentId: string) {
     return this.prisma.userOrgAssignment.delete({ where: { id: assignmentId } });
   }
+
+  // ---- Group Org Chart ----
+  async getGroupOrgChart() {
+    const userSelect = { id: true, displayName: true, avatarUrl: true, status: true };
+
+    const [businessUnits, projects, departments, orgAssignments] = await Promise.all([
+      this.prisma.businessUnit.findMany({
+        where: { isActive: true },
+        include: { headUser: { select: userSelect } },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.project.findMany({
+        where: { isActive: true },
+        include: { projectOwner: { select: userSelect } },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.department.findMany({
+        where: { isActive: true },
+        include: { manager: { select: userSelect } },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.userOrgAssignment.findMany({
+        where: { isPrimary: true, isActive: true, user: { status: 'active' } },
+        include: {
+          user: { select: userSelect },
+          position: { select: { id: true, name: true } },
+          jobLevel: { select: { code: true, name: true } },
+        },
+      }),
+    ]);
+
+    // dept id → member list
+    const deptMembersMap = new Map<string, any[]>();
+    for (const a of orgAssignments) {
+      if (!a.departmentId) continue;
+      if (!deptMembersMap.has(a.departmentId)) deptMembersMap.set(a.departmentId, []);
+      deptMembersMap.get(a.departmentId)!.push({
+        id: a.user.id,
+        displayName: a.user.displayName,
+        avatarUrl: a.user.avatarUrl,
+        status: a.user.status,
+        position: a.position?.name ?? null,
+        jobLevel: a.jobLevel ? { code: a.jobLevel.code, name: a.jobLevel.name } : null,
+      });
+    }
+
+    // BU id → assignments without a project (standalone dept members)
+    const buStandaloneAssignments = new Map<string, Set<string>>();
+    for (const a of orgAssignments) {
+      if (!a.businessUnitId || a.projectId) continue;
+      if (!buStandaloneAssignments.has(a.businessUnitId))
+        buStandaloneAssignments.set(a.businessUnitId, new Set());
+      buStandaloneAssignments.get(a.businessUnitId)!.add(a.userId);
+    }
+
+    const buildDeptNode = (dept: any) => {
+      const members = deptMembersMap.get(dept.id) ?? [];
+      return {
+        type: 'department' as const,
+        id: dept.id,
+        code: dept.code,
+        name: dept.name,
+        manager: dept.manager ?? null,
+        memberCount: members.length,
+        members,
+      };
+    };
+
+    const buildProjectNode = (project: any) => {
+      const children = departments.filter(d => d.projectId === project.id).map(buildDeptNode);
+      return {
+        type: 'project' as const,
+        id: project.id,
+        code: project.code,
+        name: project.name,
+        projectOwner: project.projectOwner ?? null,
+        memberCount: children.reduce((s, d) => s + d.memberCount, 0),
+        children,
+      };
+    };
+
+    const buildBUNode = (bu: any) => {
+      const buProjects = projects.filter(p => p.businessUnitId === bu.id).map(buildProjectNode);
+
+      // departments with no project whose members belong to this BU
+      const standaloneUserIds = buStandaloneAssignments.get(bu.id) ?? new Set<string>();
+      const standaloneDepts = departments
+        .filter(d => !d.projectId && (deptMembersMap.get(d.id) ?? []).some(m => standaloneUserIds.has(m.id)))
+        .map(buildDeptNode);
+
+      const children = [...buProjects, ...standaloneDepts];
+      return {
+        type: 'business_unit' as const,
+        id: bu.id,
+        code: bu.code,
+        name: bu.name,
+        headUser: bu.headUser ?? null,
+        memberCount: children.reduce((s, c) => s + c.memberCount, 0),
+        children,
+      };
+    };
+
+    return {
+      type: 'group' as const,
+      name: '集團',
+      memberCount: orgAssignments.length,
+      children: businessUnits.map(buildBUNode),
+    };
+  }
 }

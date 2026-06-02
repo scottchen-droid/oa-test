@@ -52,7 +52,7 @@ export class ApprovalsController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.service.findAllTemplates({ page, limit });
+    return this.service.findAllTemplates({ page: Number(page), limit: Number(limit) });
   }
 
   @Post('templates')

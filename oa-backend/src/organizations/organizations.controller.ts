@@ -16,6 +16,13 @@ import {
 export class OrganizationsController {
   constructor(private readonly service: OrganizationsService) {}
 
+  // ---- Group Org Chart ----
+  @Get('org-chart/group')
+  @ApiOperation({ summary: '集團視角組織圖（事業部 → 項目 → 部門 → 成員）' })
+  getGroupOrgChart() {
+    return this.service.getGroupOrgChart();
+  }
+
   // ---- Regions ----
   @Get('regions')
   @ApiQuery({ name: 'isActive', required: false, type: Boolean })
