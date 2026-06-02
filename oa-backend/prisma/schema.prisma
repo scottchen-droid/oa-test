@@ -31,6 +31,7 @@ model Region {
   userOrgAssignments      UserOrgAssignment[]
   employeeCostAllocations EmployeeCostAllocation[]
   payrollCostAllocations  PayrollCostAllocationSnapshot[]
+  oaFormRequests          OaFormRequest[]       @relation("OaFormRegion")
 
   @@map("regions")
 }
@@ -60,6 +61,7 @@ model Company {
   publicHolidays          PublicHoliday[]
   employeeCostAllocations EmployeeCostAllocation[]
   payrollCostAllocations  PayrollCostAllocationSnapshot[]
+  oaFormRequests          OaFormRequest[]       @relation("OaFormCompany")
 
   @@map("companies")
 }
@@ -88,6 +90,7 @@ model Department {
   approvalTemplates       ApprovalTemplate[]
   employeeCostAllocations EmployeeCostAllocation[]
   payrollCostAllocations  PayrollCostAllocationSnapshot[]
+  oaFormRequests          OaFormRequest[] @relation("OaFormDepartment")
 
   @@map("departments")
 }
@@ -110,6 +113,7 @@ model BusinessUnit {
   approvalTemplates       ApprovalTemplate[]
   employeeCostAllocations EmployeeCostAllocation[]
   payrollCostAllocations  PayrollCostAllocationSnapshot[]
+  oaFormRequests          OaFormRequest[]              @relation("OaFormBusinessUnit")
 
   @@map("business_units")
 }
@@ -136,6 +140,7 @@ model Project {
   approvalTemplates       ApprovalTemplate[]
   employeeCostAllocations EmployeeCostAllocation[]
   payrollCostAllocations  PayrollCostAllocationSnapshot[]
+  oaFormRequests          OaFormRequest[]          @relation("OaFormProject")
 
   @@map("projects")
 }
@@ -1301,19 +1306,32 @@ model PayrollCostAllocationSnapshot {
 
 /// OA 通用電子表單申請（支援多種表單類型，欄位以 JSONB 儲存）
 model OaFormRequest {
-  id              String   @id @default(uuid()) @db.Uuid
-  formType        String   @db.VarChar(100)                     // purchase_request | business_trip | asset_request | meal_allowance | it_request | headcount_request | resignation | leave_without_pay | payroll_request
-  submitterUserId String   @db.Uuid
-  content         Json     @default("{}")                        // 各表單類型的欄位（JSONB）
-  status          String   @default("pending") @db.VarChar(30)  // pending | approved | rejected | canceled
-  approvalInstanceId String? @db.Uuid
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                 String   @id @default(uuid()) @db.Uuid
+  formType           String   @db.VarChar(100)                     // purchase_request | business_trip | asset_request | meal_allowance | it_request | headcount_request | resignation | leave_without_pay | payroll_request | reimbursement_request | leave_request | overtime_request | clock_patch_request
+  submitterUserId    String   @db.Uuid
+  businessUnitId     String?  @db.Uuid                             // 成本歸屬事業部（送出時快照，供財務報表用）→ BusinessUnit
+  projectId          String?  @db.Uuid                             // 成本歸屬項目 → Project
+  departmentId       String?  @db.Uuid                             // 成本歸屬部門 → Department
+  companyId          String?  @db.Uuid                             // 成本歸屬公司 → Company
+  regionId           String?  @db.Uuid                             // 成本歸屬地區 → Region
+  content            Json     @default("{}")                        // 各表單類型的欄位（JSONB）
+  status             String   @default("draft") @db.VarChar(30)    // draft | pending | approved | rejected | canceled
+  submittedAt        DateTime?                                      // 送出時間
+  approvalInstanceId String?  @db.Uuid
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  submitter User @relation("OaFormSubmitter", fields: [submitterUserId], references: [id])
+  submitter    User          @relation("OaFormSubmitter", fields: [submitterUserId], references: [id])
+  businessUnit BusinessUnit? @relation("OaFormBusinessUnit", fields: [businessUnitId], references: [id])
+  project      Project?      @relation("OaFormProject", fields: [projectId], references: [id])
+  department   Department?   @relation("OaFormDepartment", fields: [departmentId], references: [id])
+  company      Company?      @relation("OaFormCompany", fields: [companyId], references: [id])
+  region       Region?       @relation("OaFormRegion", fields: [regionId], references: [id])
 
   @@index([submitterUserId])
   @@index([status])
+  @@index([businessUnitId])
+  @@index([projectId])
   @@map("oa_form_requests")
 }
 
