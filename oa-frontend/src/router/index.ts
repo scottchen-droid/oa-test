@@ -110,7 +110,7 @@ const router = createRouter({
         {
           path: 'home/info/org-chart',
           name: 'OrgChart',
-          component: Placeholder,
+          component: () => import('@/views/common/OrgChartView.vue'),
           meta: { title: '組織架構' },
         },
         {

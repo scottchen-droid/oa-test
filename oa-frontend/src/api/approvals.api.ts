@@ -17,10 +17,14 @@ export const approvalsApi = {
     client.post(`/api/approvals/instances/${id}/reject`, dto).then(r => r.data.data),
   getTemplates: (params?: { formType?: string; page?: number; limit?: number }) =>
     client.get('/api/approvals/templates', { params }).then(r => r.data.data),
+  getTemplate: (id: string) =>
+    client.get(`/api/approvals/templates/${id}`).then(r => r.data.data),
   createTemplate: (dto: any) =>
     client.post('/api/approvals/templates', dto).then(r => r.data.data),
   updateTemplate: (id: string, dto: any) =>
     client.patch(`/api/approvals/templates/${id}`, dto).then(r => r.data.data),
+  replaceSteps: (id: string, steps: any[]) =>
+    client.put(`/api/approvals/templates/${id}/steps`, { steps }).then(r => r.data.data),
 }
 
 export const auditLogsApi = {

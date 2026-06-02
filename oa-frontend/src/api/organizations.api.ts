@@ -1,6 +1,13 @@
 import client from './client'
 import type { Region, Company, Department, BusinessUnit, Project, Position, JobLevel } from '@/types'
 
+export const orgChartApi = {
+  async getGroupChart() {
+    const { data } = await client.get('/api/org-chart/group')
+    return data.data
+  },
+}
+
 export const regionsApi = {
   async getAll(isActive?: boolean): Promise<Region[]> {
     const { data } = await client.get('/api/regions', { params: { isActive } })

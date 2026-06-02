@@ -224,11 +224,76 @@ export class ApprovalsService {
     return { items, total, page, limit };
   }
 
+  async getTemplate(id: string) {
+    const t = await this.prisma.approvalTemplate.findUnique({
+      where: { id },
+      include: {
+        steps: {
+          include: { approvers: true },
+          orderBy: { stepOrder: 'asc' },
+        },
+      },
+    });
+    if (!t) throw new NotFoundException('Template not found');
+    return t;
+  }
+
   async createTemplate(dto: any) {
     return this.prisma.approvalTemplate.create({ data: dto });
   }
 
   async updateTemplate(id: string, dto: any) {
-    return this.prisma.approvalTemplate.update({ where: { id }, data: dto });
+    const { steps: _steps, ...rest } = dto;
+    return this.prisma.approvalTemplate.update({ where: { id }, data: rest });
+  }
+
+  async replaceTemplateSteps(id: string, steps: Array<{
+    stepOrder: number;
+    stepName: string;
+    approverType: string;
+    approvalMode: string;
+    isRequired?: boolean;
+  }>) {
+    await this.getTemplate(id); // throws 404 if not found
+
+    return this.prisma.$transaction(async (tx) => {
+      // Delete existing approvers then steps
+      const existingSteps = await tx.approvalTemplateStep.findMany({
+        where: { approvalTemplateId: id },
+        select: { id: true },
+      });
+      if (existingSteps.length > 0) {
+        await tx.approvalTemplateStepApprover.deleteMany({
+          where: { approvalTemplateStepId: { in: existingSteps.map((s) => s.id) } },
+        });
+        await tx.approvalTemplateStep.deleteMany({ where: { approvalTemplateId: id } });
+      }
+
+      // Create new steps
+      for (const step of steps) {
+        const created = await tx.approvalTemplateStep.create({
+          data: {
+            approvalTemplateId: id,
+            stepOrder: step.stepOrder,
+            stepName: step.stepName,
+            approvalMode: step.approvalMode,
+            isRequired: step.isRequired ?? true,
+          },
+        });
+        await tx.approvalTemplateStepApprover.create({
+          data: {
+            approvalTemplateStepId: created.id,
+            approverType: step.approverType,
+          },
+        });
+      }
+
+      return tx.approvalTemplate.findUnique({
+        where: { id },
+        include: {
+          steps: { include: { approvers: true }, orderBy: { stepOrder: 'asc' } },
+        },
+      });
+    });
   }
 }

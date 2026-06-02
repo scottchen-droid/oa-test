@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Put, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ApprovalsService } from './approvals.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -55,6 +55,12 @@ export class ApprovalsController {
     return this.service.findAllTemplates({ page: Number(page), limit: Number(limit) });
   }
 
+  @Get('templates/:id')
+  @ApiOperation({ summary: 'Get approval template with steps' })
+  getTemplate(@Param('id') id: string) {
+    return this.service.getTemplate(id);
+  }
+
   @Post('templates')
   @ApiOperation({ summary: 'Create approval template' })
   createTemplate(@Body() dto: any) {
@@ -62,9 +68,15 @@ export class ApprovalsController {
   }
 
   @Patch('templates/:id')
-  @ApiOperation({ summary: 'Update approval template' })
+  @ApiOperation({ summary: 'Update approval template basic info' })
   updateTemplate(@Param('id') id: string, @Body() dto: any) {
     return this.service.updateTemplate(id, dto);
+  }
+
+  @Put('templates/:id/steps')
+  @ApiOperation({ summary: 'Replace all steps of an approval template' })
+  replaceTemplateSteps(@Param('id') id: string, @Body() body: { steps: any[] }) {
+    return this.service.replaceTemplateSteps(id, body.steps ?? []);
   }
 
   @Get('instances/:id')
