@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AttendanceService } from './attendance.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -59,25 +59,31 @@ export class AttendanceController {
   }
 
   @Get('clock-patches')
-  @ApiOperation({ summary: 'HR: List manual clock patch requests' })
+  @ApiOperation({ summary: 'HR: List manual clock patch requests (includeDeleted for HR)' })
   findClockPatches(
     @Query('status') status?: string,
+    @Query('userId') userId?: string,
+    @Query('month') month?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('includeDeleted') includeDeleted?: string,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.service.findClockPatches({ status, page: Number(page), limit: Number(limit) });
+    return this.service.findClockPatches({
+      status, userId, month, startDate, endDate,
+      includeDeleted: includeDeleted === 'true',
+      page: Number(page), limit: Number(limit),
+    });
   }
 
-  @Patch('clock-patches/:id/approve')
-  @ApiOperation({ summary: 'HR: Approve clock patch' })
-  approveClockPatch(
-    @Param('id') id: string,
-    @CurrentUser() user: any,
-  ) {
+  @Post('clock-patches/:id/approve')
+  @ApiOperation({ summary: 'HR: Approve clock patch → writes to attendance record' })
+  approveClockPatch(@Param('id') id: string, @CurrentUser() user: any) {
     return this.service.approveClockPatch(id, user.sub);
   }
 
-  @Patch('clock-patches/:id/reject')
+  @Post('clock-patches/:id/reject')
   @ApiOperation({ summary: 'HR: Reject clock patch' })
   rejectClockPatch(
     @Param('id') id: string,
@@ -85,6 +91,12 @@ export class AttendanceController {
     @CurrentUser() user: any,
   ) {
     return this.service.rejectClockPatch(id, body.reason, user.sub);
+  }
+
+  @Delete('clock-patches/:id')
+  @ApiOperation({ summary: 'Employee: Soft-delete own pending clock patch request' })
+  deleteClockPatch(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.service.deleteClockPatch(id, user.sub);
   }
 
   // ─── Employee self-service ─────────────────────────────────────────────────
@@ -113,10 +125,13 @@ export class AttendanceController {
   findMyClockPatches(
     @CurrentUser() user: any,
     @Query('status') status?: string,
+    @Query('month') month?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.service.findMyClockPatches(user.sub, { status, page: Number(page), limit: Number(limit) });
+    return this.service.findMyClockPatches(user.sub, { status, month, startDate, endDate, page: Number(page), limit: Number(limit) });
   }
 
   @Post('clock-in')

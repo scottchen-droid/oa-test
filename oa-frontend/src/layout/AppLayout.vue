@@ -29,6 +29,7 @@
           </template>
           <el-menu-item index="/home/attendance/clock">{{ $t('nav.clock') }}</el-menu-item>
           <el-menu-item index="/home/attendance/records">{{ $t('nav.records') }}</el-menu-item>
+          <el-menu-item index="/home/attendance/clock-patches">補卡申請</el-menu-item>
           <el-menu-item index="/home/attendance/leaves">{{ $t('nav.leaves') }}</el-menu-item>
           <el-menu-item index="/home/attendance/overtime">{{ $t('nav.overtime') }}</el-menu-item>
         </el-sub-menu>

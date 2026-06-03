@@ -163,22 +163,25 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Briefcase, Money, Monitor, User, Remove, ShoppingCart, Suitcase } from '@element-plus/icons-vue'
+import { Briefcase, Money, Monitor, User, Remove, ShoppingCart, Suitcase, Tickets } from '@element-plus/icons-vue'
 import { formsApi } from '@/api/forms.api'
 import { useUiStore } from '@/stores/ui.store'
+import { useRouter } from 'vue-router'
 
 const { t } = useI18n()
 const ui = useUiStore()
+const router = useRouter()
 ui.setBreadcrumbs([{ title: t('nav.forms') }, { title: t('nav.apply') }])
 
 const formTypes = [
-  { type: 'purchase_request', label: '採購申請', desc: '採購物品或服務申請', icon: 'ShoppingCart', color: '#409eff' },
-  { type: 'business_trip', label: '出差申請', desc: '國內外出差差旅申請', icon: 'Suitcase', color: '#1abc9c' },
-  { type: 'asset_request', label: 'OA資產申請單', desc: '申請辦公室資產設備', icon: 'Briefcase', color: '#3498db' },
-  { type: 'meal_allowance', label: '誤餐費申請', desc: '加班誤餐費用補貼申請', icon: 'Money', color: '#67c23a' },
-  { type: 'it_request', label: '資訊需求申請', desc: '資訊系統需求或IT支援', icon: 'Monitor', color: '#e6a23c' },
-  { type: 'headcount_request', label: '人力需求申請', desc: '部門新增人力招募申請', icon: 'User', color: '#9b59b6' },
-  { type: 'resignation', label: '離職申請', desc: '提出離職申請', icon: 'Remove', color: '#f56c6c' },
+  { type: 'purchase_request', label: '採購申請', desc: '採購物品或服務申請', icon: 'ShoppingCart', color: '#409eff', route: null },
+  { type: 'business_trip', label: '出差申請', desc: '國內外出差差旅申請', icon: 'Suitcase', color: '#1abc9c', route: null },
+  { type: 'expense_reimbursement', label: '費用報銷申請', desc: '採購或出差費用實際報銷', icon: 'Tickets', color: '#e6a23c', route: '/home/forms/reimbursement/new' },
+  { type: 'asset_request', label: 'OA資產申請單', desc: '申請辦公室資產設備', icon: 'Briefcase', color: '#3498db', route: null },
+  { type: 'meal_allowance', label: '誤餐費申請', desc: '加班誤餐費用補貼申請', icon: 'Money', color: '#67c23a', route: null },
+  { type: 'it_request', label: '資訊需求申請', desc: '資訊系統需求或IT支援', icon: 'Monitor', color: '#e6a23c', route: null },
+  { type: 'headcount_request', label: '人力需求申請', desc: '部門新增人力招募申請', icon: 'User', color: '#9b59b6', route: null },
+  { type: 'resignation', label: '離職申請', desc: '提出離職申請', icon: 'Remove', color: '#f56c6c', route: null },
 ]
 
 const dialogVisible = ref(false)
@@ -229,6 +232,10 @@ const rulesMap: Record<string, FormRules> = {
 const activeRules = computed(() => activeFormType.value ? (rulesMap[activeFormType.value.type] ?? {}) : {})
 
 function openDialog(ft: typeof formTypes[0]) {
+  if (ft.route) {
+    router.push(ft.route)
+    return
+  }
   activeFormType.value = ft
   formData.value = { quantity: 1, hours: 1, amount: 100, headcount: 1, priority: 'normal', estimatedAmount: 0, estimatedBudget: 0, needAccommodation: false }
   dialogVisible.value = true

@@ -13,24 +13,26 @@ export const attendanceApi = {
     client.patch(`/api/attendance/records/${id}`, dto).then(r => r.data.data),
   getClockRecords: (params?: { userId?: string; date?: string }) =>
     client.get('/api/attendance/clock-records', { params }).then(r => r.data.data),
-  getClockPatches: (params?: { status?: string; page?: number; limit?: number }) =>
+  getClockPatches: (params?: { status?: string; userId?: string; month?: string; startDate?: string; endDate?: string; includeDeleted?: boolean; page?: number; limit?: number }) =>
     client.get('/api/attendance/clock-patches', { params }).then(r => r.data.data),
   approveClockPatch: (id: string) =>
-    client.patch(`/api/attendance/clock-patches/${id}/approve`).then(r => r.data.data),
+    client.post(`/api/attendance/clock-patches/${id}/approve`).then(r => r.data.data),
   rejectClockPatch: (id: string, reason: string) =>
-    client.patch(`/api/attendance/clock-patches/${id}/reject`, { reason }).then(r => r.data.data),
+    client.post(`/api/attendance/clock-patches/${id}/reject`, { reason }).then(r => r.data.data),
+  deleteClockPatch: (id: string) =>
+    client.delete(`/api/attendance/clock-patches/${id}`).then(r => r.data.data),
   // Employee self-service
   getToday: () =>
     client.get('/api/attendance/today').then(r => r.data.data),
   getMyRecords: (params?: { month?: string; startDate?: string; endDate?: string; page?: number; limit?: number }) =>
     client.get('/api/attendance/my-records', { params }).then(r => r.data.data),
-  getMyClockPatches: (params?: { status?: string; page?: number; limit?: number }) =>
+  getMyClockPatches: (params?: { status?: string; month?: string; startDate?: string; endDate?: string; page?: number; limit?: number }) =>
     client.get('/api/attendance/my-clock-patches', { params }).then(r => r.data.data),
   clockIn: (dto?: { clockMethod?: string; latitude?: number; longitude?: number; locationName?: string; ipAddress?: string }) =>
     client.post('/api/attendance/clock-in', dto ?? {}).then(r => r.data.data),
   clockOut: (dto?: { clockMethod?: string; latitude?: number; longitude?: number }) =>
     client.post('/api/attendance/clock-out', dto ?? {}).then(r => r.data.data),
-  createClockPatch: (dto: { clockType: string; clockTime: string; reason: string }) =>
+  createClockPatch: (dto: { clockType: string; patchDate: string; patchTime: string; reason: string }) =>
     client.post('/api/attendance/clock-patches', dto).then(r => r.data.data),
 }
 
@@ -50,8 +52,11 @@ export const leavesApi = {
     client.patch(`/api/leaves/balances/${id}`, dto).then(r => r.data.data),
   initYearBalances: (year: number, companyId?: string) =>
     client.post('/api/leaves/init-year-balances', { year, companyId }).then(r => r.data.data),
-  // Leave requests
-  getAll: (params?: { userId?: string; leaveTypeId?: string; status?: string; startDate?: string; endDate?: string; companyId?: string; deptId?: string; page?: number; limit?: number }) =>
+  // Leave requests — employee (自己的, 不含已刪除)
+  getMy: (params?: { leaveTypeId?: string; status?: string; month?: string; startDate?: string; endDate?: string; page?: number; limit?: number }) =>
+    client.get('/api/leaves/my', { params }).then(r => r.data.data),
+  // Leave requests — HR (全部, 含已刪除)
+  getAll: (params?: { userId?: string; leaveTypeId?: string; status?: string; month?: string; startDate?: string; endDate?: string; companyId?: string; deptId?: string; includeDeleted?: boolean; page?: number; limit?: number }) =>
     client.get('/api/leaves', { params }).then(r => r.data.data),
   getOne: (id: string) =>
     client.get(`/api/leaves/${id}`).then(r => r.data.data),
@@ -61,7 +66,7 @@ export const leavesApi = {
     client.patch(`/api/leaves/${id}`, dto).then(r => r.data.data),
   cancel: (id: string) =>
     client.post(`/api/leaves/${id}/cancel`).then(r => r.data.data),
-  remove: (id: string) =>
+  softDelete: (id: string) =>
     client.delete(`/api/leaves/${id}`).then(r => r.data.data),
   approve: (id: string, comment?: string) =>
     client.post(`/api/leaves/${id}/approve`, { comment }).then(r => r.data.data),
@@ -71,7 +76,9 @@ export const leavesApi = {
 
 // Overtime
 export const overtimeApi = {
-  getAll: (params?: { userId?: string; status?: string; page?: number; limit?: number }) =>
+  getMy: (params?: { status?: string; month?: string; startDate?: string; endDate?: string; page?: number; limit?: number }) =>
+    client.get('/api/overtime/my', { params }).then(r => r.data.data),
+  getAll: (params?: { userId?: string; status?: string; month?: string; startDate?: string; endDate?: string; includeDeleted?: boolean; page?: number; limit?: number }) =>
     client.get('/api/overtime', { params }).then(r => r.data.data),
   getOne: (id: string) =>
     client.get(`/api/overtime/${id}`).then(r => r.data.data),
@@ -79,8 +86,12 @@ export const overtimeApi = {
     client.post('/api/overtime', dto).then(r => r.data.data),
   update: (id: string, dto: any) =>
     client.patch(`/api/overtime/${id}`, dto).then(r => r.data.data),
-  cancel: (id: string) =>
+  softDelete: (id: string) =>
     client.delete(`/api/overtime/${id}`).then(r => r.data.data),
+  approve: (id: string) =>
+    client.post(`/api/overtime/${id}/approve`).then(r => r.data.data),
+  reject: (id: string, reason: string) =>
+    client.post(`/api/overtime/${id}/reject`, { reason }).then(r => r.data.data),
 }
 
 // Payroll

@@ -10,47 +10,47 @@
         <el-card>
           <div class="toolbar">
             <el-date-picker
-              v-model="dateRange"
-              type="daterange"
-              range-separator="至"
-              :start-placeholder="$t('common.startDate')"
-              :end-placeholder="$t('common.endDate')"
-              value-format="YYYY-MM-DD"
-              style="width: 260px"
+              v-model="monthFilter"
+              type="month"
+              placeholder="選擇月份"
+              value-format="YYYY-MM"
+              style="width: 140px"
+              clearable
               @change="onSearch"
             />
-            <el-select v-model="leaveTypeFilter" :placeholder="$t('attendance.leaveType')" clearable style="width: 160px" @change="onSearch">
+            <el-select v-model="leaveTypeFilter" placeholder="假別" clearable style="width: 140px" @change="onSearch">
               <el-option v-for="t in leaveTypes" :key="t.id" :label="t.name" :value="t.id" />
             </el-select>
-            <el-select v-model="statusFilter" :placeholder="$t('common.filter')" clearable style="width: 140px" @change="onSearch">
-              <el-option label="草稿" value="draft" />
+            <el-select v-model="statusFilter" placeholder="狀態" clearable style="width: 140px" @change="onSearch">
               <el-option label="審核中" value="submitted" />
               <el-option label="核准" value="approved" />
               <el-option label="駁回" value="rejected" />
               <el-option label="取消" value="canceled" />
             </el-select>
+            <el-checkbox v-model="includeDeleted" @change="onSearch">顯示已刪除</el-checkbox>
           </div>
 
-          <el-table v-loading="loading" :data="data" border stripe>
+          <el-table v-loading="loading" :data="data" border stripe :row-class-name="rowClass">
             <el-table-column label="員工姓名" width="120">
               <template #default="{ row }">{{ row.user?.displayName ?? '—' }}</template>
             </el-table-column>
-            <el-table-column :label="$t('attendance.leaveType')" width="120">
+            <el-table-column label="假別" width="110">
               <template #default="{ row }">{{ row.leaveType?.name ?? '—' }}</template>
             </el-table-column>
             <el-table-column label="起訖日期" width="200">
               <template #default="{ row }">{{ formatDate(row.startDate) }} ~ {{ formatDate(row.endDate) }}</template>
             </el-table-column>
-            <el-table-column prop="totalDays" :label="$t('attendance.totalDays')" width="80" />
+            <el-table-column prop="totalDays" label="天數" width="70" />
             <el-table-column prop="reason" label="事由" show-overflow-tooltip />
-            <el-table-column :label="$t('common.status')" width="100">
+            <el-table-column label="狀態" width="120">
               <template #default="{ row }">
                 <el-tag :type="leaveTagType(row.status)" size="small">{{ leaveLabel(row.status) }}</el-tag>
+                <el-tag v-if="row.deletedAt" type="danger" size="small" style="margin-left:4px">已刪除</el-tag>
               </template>
             </el-table-column>
-            <el-table-column :label="$t('common.actions')" width="160" fixed="right">
+            <el-table-column label="操作" width="140" fixed="right">
               <template #default="{ row }">
-                <template v-if="row.status === 'submitted'">
+                <template v-if="row.status === 'submitted' && !row.deletedAt">
                   <el-button size="small" type="success" @click="handleApprove(row)">核准</el-button>
                   <el-button size="small" type="danger" @click="handleRejectPrompt(row)">駁回</el-button>
                 </template>
@@ -167,9 +167,10 @@ import { useTable } from '@/composables/useTable'
 const ui = useUiStore()
 const { t } = useI18n()
 const activeTab = ref('requests')
-const dateRange = ref<[string, string] | null>(null)
+const monthFilter = ref('')
 const leaveTypeFilter = ref('')
 const statusFilter = ref('')
+const includeDeleted = ref(false)
 const leaveTypes = ref<any[]>([])
 
 const balanceSearch = ref('')
@@ -200,13 +201,16 @@ onMounted(async () => {
 
 function onSearch() {
   pagination.page = 1
-  const [startDate, endDate] = dateRange.value ?? [undefined, undefined]
   fetch({
-    startDate: startDate || undefined,
-    endDate: endDate || undefined,
+    month: monthFilter.value || undefined,
     leaveTypeId: leaveTypeFilter.value || undefined,
     status: statusFilter.value || undefined,
+    includeDeleted: includeDeleted.value || undefined,
   })
+}
+
+function rowClass({ row }: any) {
+  return row.deletedAt ? 'deleted-row' : ''
 }
 
 async function loadBalances() {
@@ -282,6 +286,9 @@ function leaveTagType(status: string): 'success' | 'warning' | 'danger' | 'info'
 <style scoped>
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .page-header h2 { font-size: 20px; font-weight: 600; margin: 0; }
-.toolbar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.toolbar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
 .pagination { margin-top: 16px; justify-content: flex-end; }
+</style>
+<style>
+.deleted-row td { opacity: 0.55; text-decoration: line-through; background: #fff5f5 !important; }
 </style>

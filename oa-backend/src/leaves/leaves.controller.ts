@@ -56,19 +56,44 @@ export class LeavesController {
   // ─── Leave Requests ────────────────────────────────────────────────────────
 
   @Get()
-  @ApiOperation({ summary: 'List leave requests' })
+  @ApiOperation({ summary: 'List leave requests (employee: own; HR: all with includeDeleted)' })
   findAll(
     @Query('userId') userId?: string,
     @Query('leaveTypeId') leaveTypeId?: string,
     @Query('status') status?: string,
+    @Query('month') month?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('companyId') companyId?: string,
     @Query('deptId') deptId?: string,
+    @Query('includeDeleted') includeDeleted?: string,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.service.findAll({ userId, leaveTypeId, status, startDate, endDate, companyId, deptId, page: Number(page), limit: Number(limit) });
+    return this.service.findAll({
+      userId, leaveTypeId, status, month, startDate, endDate, companyId, deptId,
+      includeDeleted: includeDeleted === 'true',
+      page: Number(page), limit: Number(limit),
+    });
+  }
+
+  @Get('my')
+  @ApiOperation({ summary: 'Employee: get own leave requests (excludes deleted)' })
+  findMy(
+    @CurrentUser() user: any,
+    @Query('leaveTypeId') leaveTypeId?: string,
+    @Query('status') status?: string,
+    @Query('month') month?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
+    return this.service.findAll({
+      userId: user.sub, leaveTypeId, status, month, startDate, endDate,
+      includeDeleted: false,
+      page: Number(page), limit: Number(limit),
+    });
   }
 
   @Get(':id')
@@ -96,9 +121,9 @@ export class LeavesController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'HR: Delete (soft cancel) leave request' })
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  @ApiOperation({ summary: 'Employee: Soft-delete own leave request (before approval)' })
+  softDelete(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.service.softDelete(id, user.sub);
   }
 
   // ─── HR approval ──────────────────────────────────────────────────────────

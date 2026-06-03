@@ -63,6 +63,12 @@ const router = createRouter({
           component: () => import('@/views/hr/MyOvertimeView.vue'),
           meta: { title: '加班申請' },
         },
+        {
+          path: 'home/attendance/clock-patches',
+          name: 'MyClockPatch',
+          component: () => import('@/views/home/MyClockPatchView.vue'),
+          meta: { title: '補卡申請' },
+        },
 
         // 電子表單（員工自助）
         {
@@ -76,6 +82,18 @@ const router = createRouter({
           name: 'MyFormApprovals',
           component: () => import('@/views/home/MyFormApprovalsView.vue'),
           meta: { title: '簽核' },
+        },
+        {
+          path: 'home/forms/reimbursement/new',
+          name: 'ReimbursementFormNew',
+          component: () => import('@/views/home/ReimbursementFormView.vue'),
+          meta: { title: '費用報銷申請' },
+        },
+        {
+          path: 'home/forms/reimbursements',
+          name: 'MyReimbursements',
+          component: () => import('@/views/home/MyReimbursementsView.vue'),
+          meta: { title: '我的報銷' },
         },
 
         // 登入記錄
@@ -286,6 +304,12 @@ const router = createRouter({
           name: 'AuditLogs',
           component: () => import('@/views/admin/AuditLogsView.vue'),
           meta: { title: '系統稽核日誌', module: 'system' },
+        },
+        {
+          path: 'system/exchange-rates',
+          name: 'ExchangeRates',
+          component: () => import('@/views/admin/ExchangeRatesView.vue'),
+          meta: { title: '匯率管理', module: 'system' },
         },
         {
           path: 'system/module-settings',

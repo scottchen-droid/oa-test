@@ -195,13 +195,28 @@ export class AttendanceService {
     return { items, total, page, limit };
   }
 
-  async findMyClockPatches(userId: string, params: { status?: string; page?: number; limit?: number }) {
-    const { status, page = 1, limit = 20 } = params;
+  async findMyClockPatches(userId: string, params: {
+    status?: string;
+    month?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const { status, month, startDate, endDate, page = 1, limit = 20 } = params;
     const skip = (page - 1) * limit;
 
-    const where: any = { userId, isManual: true };
-    if (status === 'pending') where.approvedBy = null;
-    else if (status === 'approved') where.approvedBy = { not: null };
+    const where: any = { userId, isManual: true, deletedAt: null };
+    if (status) where.patchStatus = status;
+
+    if (month) {
+      const [y, m] = month.split('-').map(Number);
+      where.clockTime = { gte: new Date(y, m - 1, 1), lt: new Date(y, m, 1) };
+    } else if (startDate || endDate) {
+      where.clockTime = {};
+      if (startDate) where.clockTime.gte = new Date(startDate);
+      if (endDate) where.clockTime.lte = new Date(endDate + 'T23:59:59');
+    }
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.clockRecord.findMany({
@@ -317,13 +332,32 @@ export class AttendanceService {
     return { items, total: items.length };
   }
 
-  async findClockPatches(params: { status?: string; page?: number; limit?: number }) {
-    const { status, page = 1, limit = 20 } = params;
+  async findClockPatches(params: {
+    status?: string;
+    userId?: string;
+    month?: string;
+    startDate?: string;
+    endDate?: string;
+    includeDeleted?: boolean;
+    page?: number;
+    limit?: number;
+  }) {
+    const { status, userId, month, startDate, endDate, includeDeleted = false, page = 1, limit = 20 } = params;
     const skip = (page - 1) * limit;
 
     const where: any = { isManual: true };
-    if (status === 'pending') where.approvedBy = null;
-    if (status === 'approved') where.approvedBy = { not: null };
+    if (status) where.patchStatus = status;
+    if (userId) where.userId = userId;
+    if (!includeDeleted) where.deletedAt = null;
+
+    if (month) {
+      const [y, m] = month.split('-').map(Number);
+      where.clockTime = { gte: new Date(y, m - 1, 1), lt: new Date(y, m, 1) };
+    } else if (startDate || endDate) {
+      where.clockTime = {};
+      if (startDate) where.clockTime.gte = new Date(startDate);
+      if (endDate) where.clockTime.lte = new Date(endDate + 'T23:59:59');
+    }
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.clockRecord.findMany({
@@ -342,52 +376,117 @@ export class AttendanceService {
     return { items, total, page, limit };
   }
 
+  /** HR 核准補卡申請：更新狀態 + 寫入出勤記錄 */
   async approveClockPatch(id: string, operatorId: string) {
     const record = await this.prisma.clockRecord.findUnique({ where: { id } });
     if (!record) throw new NotFoundException('Clock record not found');
     if (!record.isManual) throw new BadRequestException('Not a manual clock record');
+    if (record.patchStatus !== 'pending') throw new BadRequestException('補卡申請狀態不是待審核');
 
-    return this.prisma.clockRecord.update({
-      where: { id },
-      data: { approvedBy: operatorId, approvedAt: new Date() },
+    const clockTime = record.clockTime;
+    const workDate = new Date(clockTime.getFullYear(), clockTime.getMonth(), clockTime.getDate());
+
+    // 確保出勤記錄存在
+    let attendance = await this.prisma.attendanceRecord.findUnique({
+      where: { userId_workDate: { userId: record.userId, workDate } },
     });
+    if (!attendance) {
+      attendance = await this.prisma.attendanceRecord.create({
+        data: { userId: record.userId, workDate, status: 'normal' },
+      });
+    }
+
+    // 更新出勤記錄中的實際打卡時間
+    const attendanceUpdateData: any = {
+      attendanceRecordId: attendance.id,
+    };
+    if (record.clockType === 'clock_in') {
+      attendanceUpdateData.actualClockIn = clockTime;
+    } else {
+      attendanceUpdateData.actualClockOut = clockTime;
+    }
+
+    // 若上下班時間都有，計算工時
+    if (record.clockType === 'clock_in' && attendance.actualClockOut) {
+      const minutes = Math.round((attendance.actualClockOut.getTime() - clockTime.getTime()) / 60000);
+      attendanceUpdateData.workMinutes = Math.max(minutes, 0);
+    } else if (record.clockType === 'clock_out' && attendance.actualClockIn) {
+      const minutes = Math.round((clockTime.getTime() - attendance.actualClockIn.getTime()) / 60000);
+      attendanceUpdateData.workMinutes = Math.max(minutes, 0);
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.clockRecord.update({
+        where: { id },
+        data: { patchStatus: 'approved', approvedBy: operatorId, approvedAt: new Date(), attendanceRecordId: attendance.id },
+      }),
+      this.prisma.attendanceRecord.update({
+        where: { id: attendance.id },
+        data: attendanceUpdateData,
+      }),
+    ]);
+
+    return { message: '補卡申請已核准，出勤記錄已更新' };
   }
 
   async rejectClockPatch(id: string, reason: string, operatorId: string) {
     const record = await this.prisma.clockRecord.findUnique({ where: { id } });
     if (!record) throw new NotFoundException('Clock record not found');
+    if (!record.isManual) throw new BadRequestException('Not a manual clock record');
+    if (record.patchStatus !== 'pending') throw new BadRequestException('補卡申請狀態不是待審核');
 
     return this.prisma.clockRecord.update({
       where: { id },
-      data: { manualReason: `[REJECTED] ${reason}`, approvedBy: operatorId, approvedAt: new Date() },
+      data: {
+        patchStatus: 'rejected',
+        rejectedReason: reason,
+        approvedBy: operatorId,
+        approvedAt: new Date(),
+      },
+    });
+  }
+
+  /** 申請人軟刪除補卡申請 */
+  async deleteClockPatch(id: string, userId: string) {
+    const record = await this.prisma.clockRecord.findUnique({ where: { id } });
+    if (!record) throw new NotFoundException('補卡申請不存在');
+    if (!record.isManual) throw new BadRequestException('Not a manual clock record');
+    if (record.userId !== userId) throw new BadRequestException('只有申請人可以刪除');
+    if (record.patchStatus !== 'pending') throw new BadRequestException('只有待審核的補卡申請可以刪除');
+    if (record.deletedAt) throw new BadRequestException('已被刪除');
+
+    return this.prisma.clockRecord.update({
+      where: { id },
+      data: { patchStatus: 'deleted', deletedAt: new Date() },
     });
   }
 
   async createClockPatch(userId: string, dto: {
     clockType: string;
-    clockTime: string;
+    patchDate: string;   // YYYY-MM-DD
+    patchTime: string;   // HH:mm
     reason: string;
     ipAddress?: string;
   }) {
-    const clockTime = new Date(dto.clockTime);
-    const workDate = new Date(clockTime.getFullYear(), clockTime.getMonth(), clockTime.getDate());
+    const [h, m] = dto.patchTime.split(':').map(Number);
+    const base = new Date(dto.patchDate);
+    const clockTime = new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, m, 0);
 
-    let record = await this.prisma.attendanceRecord.findUnique({
-      where: { userId_workDate: { userId, workDate } },
-    });
-    if (!record) {
-      record = await this.prisma.attendanceRecord.create({ data: { userId, workDate, status: 'normal' } });
-    }
+    const now = new Date();
+    const ym = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
+    const patchRequestNo = `CP-${ym}-${rand}`;
 
     return this.prisma.clockRecord.create({
       data: {
         userId,
-        attendanceRecordId: record.id,
         clockType: dto.clockType,
         clockTime,
         clockMethod: 'manual',
         isManual: true,
+        patchRequestNo,
         manualReason: dto.reason,
+        patchStatus: 'pending',
         ipAddress: dto.ipAddress,
       },
     });

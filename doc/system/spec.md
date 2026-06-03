@@ -25,6 +25,7 @@
 /system/org/positions        職位管理
 /system/org/job-levels       職級管理
 /system/workflows            審批流設定
+/system/exchange-rates       匯率管理（NEW）
 /system/audit-logs           系統稽核日誌
 /system/module-settings      模塊設定
 /system/notifications        通知設定
@@ -434,7 +435,73 @@ POST   /api/approval-templates/:id/deactivate
 
 ---
 
-## 五、系統稽核日誌 `/system/audit-logs`
+## 五、匯率管理 `/system/exchange-rates`
+
+### 功能概述
+
+管理不同幣別之間的換算匯率，供費用報銷申請時自動帶入並換算金額。
+
+**資料表：** `exchange_rates`
+
+### 設計說明
+
+- 記錄 `1 fromCurrency = rate toCurrency` 的換算比率
+- 支援設定生效日期（`effectiveDate`）與失效日期（`expiryDate`），可管理歷史匯率
+- 查詢時自動取符合指定消費日期的最新有效匯率
+- 幣別相同（如 CNY→CNY）時匯率視為 1，無需查表
+
+### 列表頁
+
+**欄位：** 來源幣別、目標幣別、匯率、生效日期、失效日期、狀態（有效/停用）、備注、建立者
+
+**篩選：** 來源幣別、目標幣別、狀態
+
+**操作：** 新增匯率、編輯（修改匯率/備注/失效日期）、停用
+
+### 匯率設定建議
+
+建議至少設定以下常用幣別對（以 CNY 為基礎幣別）：
+
+| 來源幣別 | 目標幣別 | 說明 |
+|---------|---------|------|
+| TWD | CNY | 新台幣 → 人民幣 |
+| USD | CNY | 美元 → 人民幣 |
+| THB | CNY | 泰銖 → 人民幣 |
+| JPY | CNY | 日圓 → 人民幣 |
+| HKD | CNY | 港幣 → 人民幣 |
+| SGD | CNY | 新加坡元 → 人民幣 |
+| MYR | CNY | 馬來西亞令吉 → 人民幣 |
+
+若貴公司基礎幣別為 USD，則將 `toCurrency` 改為 USD。
+
+### 報銷單匯率使用邏輯
+
+1. 員工填寫費用項目時選擇收據幣別（如 THB）
+2. 點擊「查詢匯率」，系統以消費日期查找 `exchange_rates` 表最近一筆有效記錄
+3. 若找到：自動帶入匯率並計算換算金額
+4. 若找不到：提示員工手動輸入匯率
+5. 提交時將匯率值快照至 `exchangeRateSnapshot`（不受後續匯率修改影響）
+
+### 權限
+
+- **查看：** 所有登入使用者
+- **管理（新增/修改/停用）：** 具備 `system.exchange_rate.manage` 權限（系統管理員/財務主管）
+
+### API
+
+```
+GET    /api/exchange-rates                                       列表（篩選+分頁）
+GET    /api/exchange-rates/current?fromCurrency=THB&toCurrency=CNY&onDate=2026-06-01  查詢當前有效匯率
+GET    /api/exchange-rates/currencies                            取得支援幣別清單
+GET    /api/exchange-rates/:id                                   詳情
+POST   /api/exchange-rates   { fromCurrency, toCurrency, rate, effectiveDate, expiryDate?, notes? }
+PATCH  /api/exchange-rates/:id   { rate?, expiryDate?, notes?, isActive? }
+DELETE /api/exchange-rates/:id                                   停用（軟刪除，isActive=false）
+```
+
+---
+
+## 六、系統稽核日誌 `/system/audit-logs`
 
 ### 功能概述
 記錄所有重要操作的稽核軌跡，包含誰在何時對什麼資料做了什麼操作。
@@ -463,7 +530,7 @@ GET  /api/audit-logs/:id
 
 ---
 
-## 六、模塊設定 `/system/module-settings`
+## 七、模塊設定 `/system/module-settings`
 
 ### 功能概述
 啟用/停用各功能模塊，設定模塊相關參數。
@@ -475,7 +542,7 @@ GET  /api/audit-logs/:id
 
 ---
 
-## 七、通知設定 `/system/notifications`
+## 八、通知設定 `/system/notifications`
 
 ### 功能概述
 設定系統通知的發送規則與渠道。
@@ -495,7 +562,7 @@ GET  /api/audit-logs/:id
 
 ---
 
-## 八、系統設定 `/system/settings`
+## 九、系統設定 `/system/settings`
 
 **設定項目**
 - 系統名稱
@@ -541,7 +608,7 @@ GET  /api/audit-logs/:id
 
 ---
 
-## 九、多語系 (i18n)
+## 十、多語系 (i18n)
 
 ### 支援語系
 

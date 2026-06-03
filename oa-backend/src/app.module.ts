@@ -20,6 +20,7 @@ import { ReimbursementsModule } from './reimbursements/reimbursements.module';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { FormsModule } from './forms/forms.module';
+import { ExchangeRatesModule } from './exchange-rates/exchange-rates.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import configuration from './config/configuration';
 
@@ -48,6 +49,7 @@ import configuration from './config/configuration';
     ApprovalsModule,
     AuditLogsModule,
     FormsModule,
+    ExchangeRatesModule,
   ],
   providers: [
     {

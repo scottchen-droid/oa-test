@@ -260,6 +260,7 @@ model User {
   leaveBalances           LeaveBalance[]
   overtimeRequests        OvertimeRequest[]      @relation("OvertimeRequester")
   overtimeCreated         OvertimeRequest[]      @relation("OvertimeCreatedBy")
+  overtimeApproved        OvertimeRequest[]      @relation("OvertimeApprover")
   salaryStructures        SalaryStructure[]      @relation("SalaryEmployee")
   salaryCreated           SalaryStructure[]      @relation("SalaryCreatedBy")
   payrollRecords          PayrollRecord[]
@@ -269,6 +270,7 @@ model User {
   systemAuditLogs         SystemAuditLog[]
   approvalTemplateStepApprovers ApprovalTemplateStepApprover[]
   oaFormRequests          OaFormRequest[]  @relation("OaFormSubmitter")
+  exchangeRatesCreated    ExchangeRate[]   @relation("ExchangeRateCreator")
 
   @@map("users")
 }
@@ -482,6 +484,7 @@ model PurchaseRequestAllocation {
   businessUnit       BusinessUnit?   @relation(fields: [businessUnitId], references: [id])
   project            Project?        @relation(fields: [projectId], references: [id])
   reimbursementItems ReimbursementItem[]
+  reimbursements     ReimbursementRequest[] @relation("AllocationReimbursements")
 
   @@map("purchase_request_allocations")
 }
@@ -491,13 +494,19 @@ model ReimbursementRequest {
   id                     String    @id @default(uuid()) @db.Uuid
   reimbursementNo        String    @unique @db.VarChar(50)          // 報銷單號，系統自動產生
   purchaseRequestId      String?   @db.Uuid                         // 關聯採購申請（可選）→ PurchaseRequest
+  purchaseAllocationId   String?   @db.Uuid                         // 關聯採購分攤項目（可選，限定某個事業部/項目的分攤）→ PurchaseRequestAllocation
+  businessTripFormId     String?   @db.Uuid                         // 關聯出差申請 OaFormRequest（出差報銷時使用）→ OaFormRequest
+  sourceFormType         String?   @db.VarChar(50)                  // 來源表單類型：purchase_request / business_trip（null=無關聯申請）
   claimantUserId         String    @db.Uuid                         // 報銷申請人 → User
   reimbursementCompanyId String    @db.Uuid                         // 報銷所屬公司 → Company
   reimbursementRegionId  String    @db.Uuid                         // 報銷所屬地區 → Region
   title                  String    @db.VarChar(200)
   description            String?
-  totalAmount            Decimal   @db.Decimal(18, 2)
-  currencyCode           String    @db.VarChar(10)
+  totalAmount            Decimal   @default(0) @db.Decimal(18, 2)   // 報銷總金額（申請幣別，自動加總 items.convertedAmount）
+  currencyCode           String    @db.VarChar(10)                  // 報銷基礎幣別（與來源申請幣別相同）
+  bankName               String?   @db.VarChar(100)                 // 收款銀行
+  bankAccountNo          String?   @db.VarChar(100)                 // 收款帳號
+  bankAccountName        String?   @db.VarChar(100)                 // 開戶名稱
   status                 String    @default("draft") @db.VarChar(30) // draft/submitted/approved/rejected/paid/canceled
   submittedAt            DateTime?
   approvedAt             DateTime?
@@ -509,36 +518,70 @@ model ReimbursementRequest {
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
-  purchaseRequest PurchaseRequest?  @relation(fields: [purchaseRequestId], references: [id])
-  claimant        User              @relation("ReimbursementClaimant", fields: [claimantUserId], references: [id])
-  company         Company           @relation(fields: [reimbursementCompanyId], references: [id])
-  region          Region            @relation(fields: [reimbursementRegionId], references: [id])
-  creator         User              @relation("ReimbursementCreatedBy", fields: [createdBy], references: [id])
-  updater         User?             @relation("ReimbursementUpdatedBy", fields: [updatedBy], references: [id])
-  items           ReimbursementItem[]
+  purchaseRequest     PurchaseRequest?           @relation(fields: [purchaseRequestId], references: [id])
+  purchaseAllocation  PurchaseRequestAllocation? @relation("AllocationReimbursements", fields: [purchaseAllocationId], references: [id])
+  businessTripForm    OaFormRequest?             @relation("BusinessTripReimbursements", fields: [businessTripFormId], references: [id])
+  claimant            User                       @relation("ReimbursementClaimant", fields: [claimantUserId], references: [id])
+  company             Company                    @relation(fields: [reimbursementCompanyId], references: [id])
+  region              Region                     @relation(fields: [reimbursementRegionId], references: [id])
+  creator             User                       @relation("ReimbursementCreatedBy", fields: [createdBy], references: [id])
+  updater             User?                      @relation("ReimbursementUpdatedBy", fields: [updatedBy], references: [id])
+  items               ReimbursementItem[]
 
   @@map("reimbursement_requests")
 }
 
-/// 報銷明細項目（每筆費用一行）
+/// 報銷明細項目（每筆費用一行，支援多幣別）
 model ReimbursementItem {
   id                          String    @id @default(uuid()) @db.Uuid
   reimbursementRequestId      String    @db.Uuid                  // 所屬報銷單 → ReimbursementRequest
   purchaseRequestAllocationId String?   @db.Uuid                  // 對應的採購分攤項目（可選）→ PurchaseRequestAllocation
   expenseDate                 DateTime? @db.Date                   // 消費日期
-  expenseType                 String?   @db.VarChar(100)           // 費用類型，如 餐費 / 交通費 / 住宿
-  amount                      Decimal   @db.Decimal(18, 2)
-  currencyCode                String    @db.VarChar(10)
+  expenseType                 String?   @db.VarChar(100)           // 費用類型：meal/transport/accommodation/purchase/other
+  originalCurrencyCode        String    @db.VarChar(10)            // 收據幣別（實際花費幣別，如 THB/JPY/TWD）
+  originalAmount              Decimal   @db.Decimal(18, 2)         // 收據金額（原始幣別）
+  exchangeRateId              String?   @db.Uuid                   // 使用的匯率 ID → ExchangeRate（同幣別時為 null）
+  exchangeRateSnapshot        Decimal?  @db.Decimal(18, 8)         // 匯率快照（提交時鎖定，1 originalCurrency = X baseCurrency）
+  amount                      Decimal   @db.Decimal(18, 2)         // 換算後金額（報銷基礎幣別）= originalAmount × exchangeRateSnapshot
+  currencyCode                String    @db.VarChar(10)            // 報銷基礎幣別（與報銷單 currencyCode 相同）
   vendorName                  String?   @db.VarChar(150)           // 供應商/商家名稱
   invoiceNo                   String?   @db.VarChar(100)           // 發票號碼
   description                 String?
+  sortOrder                   Int       @default(0)                // 排序
   createdAt                   DateTime  @default(now())
   updatedAt                   DateTime  @updatedAt
 
-  reimbursementRequest      ReimbursementRequest        @relation(fields: [reimbursementRequestId], references: [id])
+  reimbursementRequest      ReimbursementRequest        @relation(fields: [reimbursementRequestId], references: [id], onDelete: Cascade)
   purchaseRequestAllocation PurchaseRequestAllocation?  @relation(fields: [purchaseRequestAllocationId], references: [id])
+  exchangeRate              ExchangeRate?               @relation(fields: [exchangeRateId], references: [id])
 
   @@map("reimbursement_items")
+}
+
+// ═══════════════════════════════════════════════
+// 匯率管理
+// ═══════════════════════════════════════════════
+
+/// 匯率設定（支援多幣別費用換算）
+/// 記錄 1 單位 fromCurrency = rate 單位 toCurrency
+model ExchangeRate {
+  id            String    @id @default(uuid()) @db.Uuid
+  fromCurrency  String    @db.VarChar(10)                 // 來源幣別，如 THB / JPY / TWD
+  toCurrency    String    @db.VarChar(10)                 // 目標幣別（基礎幣別），如 CNY / USD
+  rate          Decimal   @db.Decimal(18, 8)              // 匯率：1 fromCurrency = rate toCurrency
+  effectiveDate DateTime  @db.Date                        // 生效日期（含）
+  expiryDate    DateTime? @db.Date                        // 失效日期（null=至今有效）
+  isActive      Boolean   @default(true)
+  notes         String?                                   // 備注（如資料來源）
+  createdBy     String    @db.Uuid                        // 建立者 → User
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  creator          User                @relation("ExchangeRateCreator", fields: [createdBy], references: [id])
+  reimbursementItems ReimbursementItem[]
+
+  @@index([fromCurrency, toCurrency, effectiveDate])
+  @@map("exchange_rates")
 }
 
 // ═══════════════════════════════════════════════
@@ -946,6 +989,7 @@ model LeaveRequest {
   approvedAt  DateTime?
   rejectedAt  DateTime?
   canceledAt  DateTime?
+  deletedAt   DateTime?                              // 申請人軟刪除時間（HR 仍可查詢）
   createdBy   String    @db.Uuid
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -955,6 +999,7 @@ model LeaveRequest {
   proxy     User?     @relation("LeaveProxy", fields: [proxyUserId], references: [id])
   creator   User      @relation("LeaveCreatedBy", fields: [createdBy], references: [id])
 
+  @@index([userId, deletedAt])
   @@map("leave_requests")
 }
 
@@ -996,16 +1041,21 @@ model ClockRecord {
   longitude          Decimal?  @db.Decimal(11, 8)      // GPS 經度
   locationName       String?   @db.VarChar(200)        // 地點名稱（如 台北辦公室）
   ipAddress          String?   @db.VarChar(45)         // 打卡來源 IP
-  isManual           Boolean   @default(false)         // 是否為補登（需主管審核）
-  manualReason       String?                           // 補登原因
-  approvedBy         String?   @db.Uuid                // 補登審核人 → User
+  isManual           Boolean   @default(false)         // 是否為補卡申請（需主管審核）
+  patchRequestNo     String?   @db.VarChar(50)         // 補卡申請單號（isManual=true 時生成）
+  manualReason       String?                           // 補卡原因
+  patchStatus        String?   @db.VarChar(20)         // 補卡申請狀態：pending | approved | rejected | deleted
+  rejectedReason     String?                           // 駁回原因
+  approvedBy         String?   @db.Uuid                // 審核人 → User
   approvedAt         DateTime?
+  deletedAt          DateTime?                         // 申請人軟刪除時間（HR 仍可查詢）
   createdAt          DateTime  @default(now())
 
   user             User              @relation(fields: [userId], references: [id])
   attendanceRecord AttendanceRecord? @relation(fields: [attendanceRecordId], references: [id])
   approver         User?             @relation("ClockApprovedBy", fields: [approvedBy], references: [id])
 
+  @@index([userId, isManual, deletedAt])
   @@map("clock_records")
 }
 
@@ -1021,17 +1071,22 @@ model OvertimeRequest {
   overtimeType     String    @db.VarChar(30)   // 類型：weekday / weekend / holiday
   compensationType String    @default("pay") @db.VarChar(30)  // 補償方式：pay=加班費 / leave=補休
   reason           String?
-  status           String    @default("draft") @db.VarChar(30)
-  submittedAt      DateTime?
+  approvedBy       String?   @db.Uuid          // 審核人 → User
+  rejectedReason   String?                     // 駁回原因
+  status           String    @default("submitted") @db.VarChar(30)
+  submittedAt      DateTime  @default(now())   // 送出時間（建立即送出）
   approvedAt       DateTime?
   rejectedAt       DateTime?
+  deletedAt        DateTime?                   // 申請人軟刪除時間（HR 仍可查詢）
   createdBy        String    @db.Uuid
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  user    User @relation("OvertimeRequester", fields: [userId], references: [id])
-  creator User @relation("OvertimeCreatedBy", fields: [createdBy], references: [id])
+  user     User  @relation("OvertimeRequester", fields: [userId], references: [id])
+  creator  User  @relation("OvertimeCreatedBy", fields: [createdBy], references: [id])
+  approver User? @relation("OvertimeApprover", fields: [approvedBy], references: [id])
 
+  @@index([userId, deletedAt])
   @@map("overtime_requests")
 }
 
@@ -1365,12 +1420,13 @@ model OaFormRequest {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  submitter    User          @relation("OaFormSubmitter", fields: [submitterUserId], references: [id])
-  businessUnit BusinessUnit? @relation("OaFormBusinessUnit", fields: [businessUnitId], references: [id])
-  project      Project?      @relation("OaFormProject", fields: [projectId], references: [id])
-  department   Department?   @relation("OaFormDepartment", fields: [departmentId], references: [id])
-  company      Company?      @relation("OaFormCompany", fields: [companyId], references: [id])
-  region       Region?       @relation("OaFormRegion", fields: [regionId], references: [id])
+  submitter      User          @relation("OaFormSubmitter", fields: [submitterUserId], references: [id])
+  businessUnit   BusinessUnit? @relation("OaFormBusinessUnit", fields: [businessUnitId], references: [id])
+  project        Project?      @relation("OaFormProject", fields: [projectId], references: [id])
+  department     Department?   @relation("OaFormDepartment", fields: [departmentId], references: [id])
+  company        Company?      @relation("OaFormCompany", fields: [companyId], references: [id])
+  region         Region?       @relation("OaFormRegion", fields: [regionId], references: [id])
+  reimbursements ReimbursementRequest[] @relation("BusinessTripReimbursements")
 
   @@index([submitterUserId])
   @@index([status])

@@ -131,19 +131,26 @@ export class LeavesService {
     status?: string;
     startDate?: string;
     endDate?: string;
+    month?: string;
     companyId?: string;
     deptId?: string;
+    includeDeleted?: boolean;
     page?: number;
     limit?: number;
   }) {
-    const { userId, leaveTypeId, status, startDate, endDate, companyId, deptId, page = 1, limit = 20 } = params;
+    const { userId, leaveTypeId, status, startDate, endDate, month, companyId, deptId, includeDeleted = false, page = 1, limit = 20 } = params;
     const skip = (page - 1) * limit;
 
     const where: any = {};
     if (userId) where.userId = userId;
     if (leaveTypeId) where.leaveTypeId = leaveTypeId;
     if (status) where.status = status;
-    if (startDate || endDate) {
+    if (!includeDeleted) where.deletedAt = null;
+
+    if (month) {
+      const [y, m] = month.split('-').map(Number);
+      where.startDate = { gte: new Date(y, m - 1, 1), lt: new Date(y, m, 1) };
+    } else if (startDate || endDate) {
       where.startDate = {};
       if (startDate) where.startDate.gte = new Date(startDate);
       if (endDate) where.startDate.lte = new Date(endDate);
@@ -305,6 +312,36 @@ export class LeavesService {
     return this.prisma.leaveRequest.update({
       where: { id },
       data: { status: 'canceled', canceledAt: new Date() },
+    });
+  }
+
+  /** 申請人軟刪除（未完成審批前可刪除；HR 仍可查詢） */
+  async softDelete(id: string, userId: string) {
+    const req = await this.prisma.leaveRequest.findUnique({ where: { id } });
+    if (!req) throw new NotFoundException('Leave request not found');
+    if (req.userId !== userId) throw new BadRequestException('Not authorized');
+    if (!['draft', 'submitted'].includes(req.status)) {
+      throw new BadRequestException('只有草稿或待審核的假單可以刪除');
+    }
+    if (req.deletedAt) throw new BadRequestException('假單已被刪除');
+
+    // Release pending balance if submitted
+    if (req.status === 'submitted') {
+      const year = req.startDate.getFullYear();
+      const balance = await this.prisma.leaveBalance.findUnique({
+        where: { userId_leaveTypeId_year: { userId, leaveTypeId: req.leaveTypeId, year } },
+      });
+      if (balance && Number(balance.pendingDays) > 0) {
+        await this.prisma.leaveBalance.update({
+          where: { id: balance.id },
+          data: { pendingDays: { decrement: Number(req.totalDays) } },
+        });
+      }
+    }
+
+    return this.prisma.leaveRequest.update({
+      where: { id },
+      data: { deletedAt: new Date() },
     });
   }
 
