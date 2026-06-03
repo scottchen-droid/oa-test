@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-header">
-      <h2>公告</h2>
+      <h2>{{ $t('nav.announcements') }}</h2>
     </div>
 
     <el-card>
@@ -9,7 +9,7 @@
         <el-skeleton :rows="6" animated />
       </div>
 
-      <el-empty v-else-if="items.length === 0" description="目前沒有公告" />
+      <el-empty v-else-if="items.length === 0" :description="$t('common.noData')" />
 
       <div v-else class="announcement-list">
         <div
@@ -19,7 +19,7 @@
           @click="router.push(`/announcements/${item.id}`)"
         >
           <div class="item-header">
-            <el-tag v-if="item.isPinned" type="danger" size="small" effect="plain">置頂</el-tag>
+            <el-tag v-if="item.isPinned" type="danger" size="small" effect="plain">{{ $t('announcement.pinned') }}</el-tag>
             <span class="item-title">{{ item.title }}</span>
             <el-tag size="small" effect="plain">{{ item.type }}</el-tag>
           </div>
@@ -63,11 +63,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { Document } from '@element-plus/icons-vue'
 import { useUiStore } from '@/stores/ui.store'
 import { announcementsApi } from '@/api/dashboard.api'
 import type { AnnouncementItem } from '@/types'
 
+const { t } = useI18n()
 const ui = useUiStore()
 const router = useRouter()
 
@@ -95,7 +97,7 @@ function formatDate(d: string) {
 }
 
 onMounted(() => {
-  ui.setBreadcrumbs([{ title: '公告' }])
+  ui.setBreadcrumbs([{ title: t('nav.announcements') }])
   loadData()
 })
 </script>

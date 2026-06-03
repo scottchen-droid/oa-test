@@ -57,14 +57,13 @@ export class UsersService {
           nameZh: true,
           nameEn: true,
           status: true,
-          isSuperAdmin: true,
           avatarUrl: true,
           lastLoginAt: true,
           createdAt: true,
           orgAssignments: {
             where: { isPrimary: true },
             select: {
-              company: { select: { id: true, name: true } },
+              company: { select: { id: true, name: true, region: { select: { id: true, name: true, defaultLocale: true } } } },
               department: { select: { id: true, name: true } },
               position: { select: { id: true, name: true } },
             },
@@ -93,7 +92,6 @@ export class UsersService {
         nameEn: true,
         avatarUrl: true,
         status: true,
-        isSuperAdmin: true,
         authProvider: true,
         lastLoginAt: true,
         passwordChangedAt: true,

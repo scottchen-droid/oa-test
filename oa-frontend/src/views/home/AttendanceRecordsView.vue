@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-header">
-      <h2>出勤紀錄</h2>
+      <h2>{{ $t('nav.records') }}</h2>
     </div>
 
     <!-- 查詢條件 -->
@@ -11,30 +11,30 @@
           v-model="dateRange"
           type="daterange"
           range-separator="至"
-          start-placeholder="開始日期"
-          end-placeholder="結束日期"
+          :start-placeholder="$t('common.startDate')"
+          :end-placeholder="$t('common.endDate')"
           value-format="YYYY-MM-DD"
           :shortcuts="dateShortcuts"
           style="width: 280px"
         />
-        <el-button type="primary" :icon="Search" @click="doSearch">查詢</el-button>
-        <el-button @click="resetFilter">重置</el-button>
+        <el-button type="primary" :icon="Search" @click="doSearch">{{ $t('common.search') }}</el-button>
+        <el-button @click="resetFilter">{{ $t('common.refresh') }}</el-button>
       </div>
     </el-card>
 
     <!-- 紀錄列表 -->
     <el-card style="margin-top: 16px;">
       <el-table v-loading="loading" :data="data" border stripe>
-        <el-table-column prop="workDate" label="日期" width="110">
+        <el-table-column prop="workDate" :label="$t('common.date')" width="110">
           <template #default="{ row }">{{ formatDate(row.workDate) }}</template>
         </el-table-column>
-        <el-table-column label="上班打卡" width="110">
+        <el-table-column :label="$t('attendance.clockIn')" width="110">
           <template #default="{ row }">
             <span v-if="row.actualClockIn" class="time-text">{{ formatTime(row.actualClockIn) }}</span>
             <el-tag v-else type="danger" size="small">缺卡</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="下班打卡" width="110">
+        <el-table-column :label="$t('attendance.clockOut')" width="110">
           <template #default="{ row }">
             <span v-if="row.actualClockOut" class="time-text">{{ formatTime(row.actualClockOut) }}</span>
             <el-tag v-else type="danger" size="small">缺卡</el-tag>
@@ -43,15 +43,15 @@
         <el-table-column label="工時" width="100">
           <template #default="{ row }">{{ formatWorkMinutes(row.workMinutes) }}</template>
         </el-table-column>
-        <el-table-column label="狀態" width="90">
+        <el-table-column :label="$t('common.status')" width="90">
           <template #default="{ row }">
             <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="備註" min-width="120">
+        <el-table-column :label="$t('common.remark')" min-width="120">
           <template #default="{ row }">{{ row.note ?? '—' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column :label="$t('common.actions')" width="100" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="needsPatch(row)"
@@ -82,7 +82,7 @@
     <!-- 補卡申請 Dialog -->
     <el-dialog
       v-model="patchDialogVisible"
-      title="補卡申請"
+      :title="$t('attendance.clockPatch')"
       width="480px"
       :close-on-click-modal="false"
     >
@@ -92,8 +92,8 @@
         </el-form-item>
         <el-form-item label="補卡類型" prop="punchType">
           <el-radio-group v-model="patchForm.punchType">
-            <el-radio value="clock_in" :disabled="!!selectedRecord?.actualClockIn">上班打卡</el-radio>
-            <el-radio value="clock_out" :disabled="!!selectedRecord?.actualClockOut">下班打卡</el-radio>
+            <el-radio value="clock_in" :disabled="!!selectedRecord?.actualClockIn">{{ $t('attendance.clockIn') }}</el-radio>
+            <el-radio value="clock_out" :disabled="!!selectedRecord?.actualClockOut">{{ $t('attendance.clockOut') }}</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="補卡時間" prop="punchTime">
@@ -115,23 +115,25 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="patchDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitPatch">送出補卡申請</el-button>
+        <el-button @click="patchDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="submitting" @click="submitPatch">{{ $t('common.submit') }}</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { Search, Edit } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
 import { attendanceApi } from '@/api/hr.api'
 import { useUiStore } from '@/stores/ui.store'
 import { useTable } from '@/composables/useTable'
 
 const ui = useUiStore()
+const { t } = useI18n()
 
 // Current month as default date range
 const now = new Date()
@@ -166,14 +168,14 @@ const patchFormRef = ref<FormInstance>()
 const selectedRecord = ref<any>(null)
 const patchForm = ref({ date: '', punchType: 'clock_in', punchTime: '', reason: '' })
 
-const patchRules = {
-  punchType: [{ required: true, message: '請選擇補卡類型', trigger: 'change' }],
-  punchTime: [{ required: true, message: '請選擇補卡時間', trigger: 'change' }],
-  reason: [{ required: true, message: '請填寫補卡原因', trigger: 'blur' }],
-}
+const patchRules = computed(() => ({
+  punchType: [{ required: true, message: t('common.required'), trigger: 'change' }],
+  punchTime: [{ required: true, message: t('common.required'), trigger: 'change' }],
+  reason: [{ required: true, message: t('common.required'), trigger: 'blur' }],
+}))
 
 onMounted(() => {
-  ui.setBreadcrumbs([{ title: '考勤管理' }, { title: '出勤紀錄' }])
+  ui.setBreadcrumbs([{ title: t('nav.attendance') }, { title: t('nav.records') }])
   doSearch()
 })
 
@@ -223,11 +225,11 @@ async function submitPatch() {
         clockTime,
         reason: patchForm.value.reason,
       })
-      ElMessage.success('補卡申請送出成功，等待主管審核')
+      ElMessage.success(t('msg.submitSuccess'))
       patchDialogVisible.value = false
       fetch(buildParams())
     } catch (err: any) {
-      ElMessage.error(err?.response?.data?.message ?? '送出失敗，請稍後再試')
+      ElMessage.error(err?.response?.data?.message ?? t('msg.submitFailed'))
     } finally {
       submitting.value = false
     }

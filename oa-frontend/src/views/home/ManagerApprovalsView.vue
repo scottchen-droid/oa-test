@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-header">
-      <h2>簽核</h2>
+      <h2>{{ $t('manager.pendingApprovals') }}</h2>
     </div>
 
     <el-card>
@@ -19,29 +19,29 @@
           </template>
 
           <div class="tab-content">
-            <el-table v-loading="loading" :data="items" border stripe empty-text="目前無待簽核項目">
-              <el-table-column label="單號 / 說明" min-width="160">
+            <el-table v-loading="loading" :data="items" border stripe :empty-text="$t('manager.noData')">
+              <el-table-column label="ID" min-width="160">
                 <template #default="{ row }">
                   <span class="form-id">{{ row.formId?.slice(0, 8) ?? '—' }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="formType" label="類型" width="110">
+              <el-table-column prop="formType" :label="$t('common.type')" width="110">
                 <template #default="{ row }">
                   <el-tag size="small" :type="formTypeTagType(row.formType)">{{ formTypeLabel(row.formType) }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="目前步驟" width="130">
+              <el-table-column :label="$t('common.status')" width="130">
                 <template #default="{ row }">
-                  <span>第 {{ row.currentStepOrder ?? '—' }} 關</span>
+                  {{ row.currentStepOrder ? `Step ${row.currentStepOrder}` : '—' }}
                 </template>
               </el-table-column>
-              <el-table-column label="提交時間" width="150">
+              <el-table-column :label="$t('form.submittedAt')" width="150">
                 <template #default="{ row }">{{ formatDateTime(row.startedAt ?? row.createdAt) }}</template>
               </el-table-column>
-              <el-table-column label="操作" width="160" fixed="right">
+              <el-table-column :label="$t('common.actions')" width="160" fixed="right">
                 <template #default="{ row }">
-                  <el-button size="small" type="success" @click="openApprove(row)">通過</el-button>
-                  <el-button size="small" type="danger" @click="openReject(row)">駁回</el-button>
+                  <el-button size="small" type="success" @click="openApprove(row)">{{ $t('manager.approve') }}</el-button>
+                  <el-button size="small" type="danger" @click="openReject(row)">{{ $t('manager.reject') }}</el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -60,48 +60,48 @@
       </el-tabs>
     </el-card>
 
-    <!-- 通過確認 -->
-    <el-dialog v-model="approveDialogVisible" title="確認通過" width="420px">
-      <el-form label-width="80px">
-        <el-form-item label="簽核意見">
-          <el-input v-model="approveComment" type="textarea" :rows="3" placeholder="選填" />
+    <el-dialog v-model="approveDialogVisible" :title="$t('manager.approve')" width="420px">
+      <el-form label-width="90px">
+        <el-form-item :label="$t('manager.comment')">
+          <el-input v-model="approveComment" type="textarea" :rows="3" :placeholder="$t('common.optional')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="approveDialogVisible = false">取消</el-button>
-        <el-button type="success" :loading="actionLoading" @click="confirmApprove">確認通過</el-button>
+        <el-button @click="approveDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="success" :loading="actionLoading" @click="confirmApprove">{{ $t('manager.approve') }}</el-button>
       </template>
     </el-dialog>
 
-    <!-- 駁回確認 -->
-    <el-dialog v-model="rejectDialogVisible" title="確認駁回" width="420px">
-      <el-form label-width="80px">
-        <el-form-item label="駁回原因" required>
-          <el-input v-model="rejectComment" type="textarea" :rows="3" placeholder="請填寫駁回原因（必填）" />
+    <el-dialog v-model="rejectDialogVisible" :title="$t('manager.reject')" width="420px">
+      <el-form label-width="90px">
+        <el-form-item :label="$t('manager.comment')" required>
+          <el-input v-model="rejectComment" type="textarea" :rows="3" :placeholder="$t('manager.commentRequired')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="rejectDialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="actionLoading" :disabled="!rejectComment.trim()" @click="confirmReject">確認駁回</el-button>
+        <el-button @click="rejectDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="danger" :loading="actionLoading" :disabled="!rejectComment.trim()" @click="confirmReject">{{ $t('manager.reject') }}</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { approvalsApi } from '@/api/approvals.api'
 import { useUiStore } from '@/stores/ui.store'
 
+const { t } = useI18n()
 const ui = useUiStore()
 
-const tabs = [
-  { formType: 'leave', label: '請假簽核' },
-  { formType: 'clock_patch', label: '補卡簽核' },
-  { formType: 'overtime', label: '加班簽核' },
-  { formType: 'form', label: '電子表單簽核' },
-]
+const tabs = computed(() => [
+  { formType: 'leave',       label: t('manager.leaveApproval') },
+  { formType: 'clock_patch', label: t('manager.clockPatch') },
+  { formType: 'overtime',    label: t('manager.overtimeApproval') },
+  { formType: 'form',        label: t('manager.formApproval') },
+])
 
 const activeTab = ref('leave')
 const loading = ref(false)
@@ -120,6 +120,7 @@ const rejectComment = ref('')
 
 onMounted(async () => {
   ui.setBreadcrumbs([{ title: '主管' }, { title: '簽核' }])
+  ui.setBreadcrumbs([{ title: t('nav.manager') }, { title: t('manager.pendingApprovals') }])
   await Promise.all([loadCounts(), loadList()])
 })
 
@@ -168,7 +169,7 @@ async function confirmApprove() {
   actionLoading.value = true
   try {
     await approvalsApi.approve(selectedInstance.value.id, { comment: approveComment.value || undefined })
-    ElMessage.success('已通過')
+    ElMessage.success(t('msg.approveSuccess'))
     approveDialogVisible.value = false
     await Promise.all([loadCounts(), loadList(page.value)])
   } catch (err: any) {
@@ -183,7 +184,7 @@ async function confirmReject() {
   actionLoading.value = true
   try {
     await approvalsApi.reject(selectedInstance.value.id, { comment: rejectComment.value })
-    ElMessage.success('已駁回')
+    ElMessage.success(t('msg.rejectSuccess'))
     rejectDialogVisible.value = false
     await Promise.all([loadCounts(), loadList(page.value)])
   } catch (err: any) {
@@ -194,7 +195,10 @@ async function confirmReject() {
 }
 
 function formTypeLabel(type: string): string {
-  const map: Record<string, string> = { leave: '請假', clock_patch: '補卡', overtime: '加班', form: '表單' }
+  const map: Record<string, string> = {
+    leave: t('attendance.leaveRequest'), clock_patch: t('attendance.clockPatch'),
+    overtime: t('attendance.overtimeRequest'), form: t('nav.forms'),
+  }
   return map[type] ?? type
 }
 

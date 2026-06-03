@@ -160,14 +160,16 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Briefcase, Money, Monitor, User, Remove, ShoppingCart, Suitcase } from '@element-plus/icons-vue'
 import { formsApi } from '@/api/forms.api'
 import { useUiStore } from '@/stores/ui.store'
 
+const { t } = useI18n()
 const ui = useUiStore()
-ui.setBreadcrumbs([{ title: '電子表單' }, { title: '申請' }])
+ui.setBreadcrumbs([{ title: t('nav.forms') }, { title: t('nav.apply') }])
 
 const formTypes = [
   { type: 'purchase_request', label: '採購申請', desc: '採購物品或服務申請', icon: 'ShoppingCart', color: '#409eff' },

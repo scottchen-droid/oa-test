@@ -9,6 +9,7 @@ export class CreateRegionDto {
   @ApiProperty() @IsString() name: string;
   @ApiPropertyOptional() @IsOptional() @IsString() timezone?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() currencyCode?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() defaultLocale?: string;
 }
 
 export class CreateCompanyDto {
@@ -354,37 +355,40 @@ export class OrganizationsService {
       }),
     ]);
 
-    // dept id → member list
-    const deptMembersMap = new Map<string, any[]>();
-    for (const a of orgAssignments) {
-      if (!a.departmentId) continue;
-      if (!deptMembersMap.has(a.departmentId)) deptMembersMap.set(a.departmentId, []);
-      deptMembersMap.get(a.departmentId)!.push({
-        id: a.user.id,
-        displayName: a.user.displayName,
-        avatarUrl: a.user.avatarUrl,
-        status: a.user.status,
-        position: a.position?.name ?? null,
-        jobLevel: a.jobLevel ? { code: a.jobLevel.code, name: a.jobLevel.name } : null,
-      });
-    }
+    const toMember = (a: any) => ({
+      id:          a.user.id,
+      displayName: a.user.displayName,
+      avatarUrl:   a.user.avatarUrl,
+      status:      a.user.status,
+      position:    a.position?.name ?? null,
+      jobLevel:    a.jobLevel ? { code: a.jobLevel.code, name: a.jobLevel.name } : null,
+    });
 
-    // BU id → assignments without a project (standalone dept members)
-    const buStandaloneAssignments = new Map<string, Set<string>>();
+    // Build lookup maps keyed by each org dimension
+    const membersByDept    = new Map<string, any[]>();
+    const membersByProject = new Map<string, any[]>();
+    const membersByBU      = new Map<string, any[]>();
+
     for (const a of orgAssignments) {
-      if (!a.businessUnitId || a.projectId) continue;
-      if (!buStandaloneAssignments.has(a.businessUnitId))
-        buStandaloneAssignments.set(a.businessUnitId, new Set());
-      buStandaloneAssignments.get(a.businessUnitId)!.add(a.userId);
+      if (a.departmentId) {
+        if (!membersByDept.has(a.departmentId)) membersByDept.set(a.departmentId, []);
+        membersByDept.get(a.departmentId)!.push(toMember(a));
+      }
+      if (a.projectId) {
+        if (!membersByProject.has(a.projectId)) membersByProject.set(a.projectId, []);
+        membersByProject.get(a.projectId)!.push(toMember(a));
+      }
+      if (a.businessUnitId) {
+        if (!membersByBU.has(a.businessUnitId)) membersByBU.set(a.businessUnitId, []);
+        membersByBU.get(a.businessUnitId)!.push(toMember(a));
+      }
     }
 
     const buildDeptNode = (dept: any) => {
-      const members = deptMembersMap.get(dept.id) ?? [];
+      const members = membersByDept.get(dept.id) ?? [];
       return {
         type: 'department' as const,
-        id: dept.id,
-        code: dept.code,
-        name: dept.name,
+        id: dept.id, code: dept.code, name: dept.name,
         manager: dept.manager ?? null,
         memberCount: members.length,
         members,
@@ -392,14 +396,37 @@ export class OrganizationsService {
     };
 
     const buildProjectNode = (project: any) => {
-      const children = departments.filter(d => d.projectId === project.id).map(buildDeptNode);
+      const deptChildren = departments
+        .filter(d => d.projectId === project.id)
+        .map(buildDeptNode);
+
+      // employees directly under this project (no department set)
+      const projMembers = membersByProject.get(project.id) ?? [];
+      const deptMemberIds = new Set(deptChildren.flatMap(d => d.members.map((m: any) => m.id)));
+      const directMembers = projMembers.filter(m => !deptMemberIds.has(m.id));
+
+      const totalCount = projMembers.length;
+      const children: any[] = [...deptChildren];
+
+      // Add virtual "直屬人員" node if there are direct members
+      if (directMembers.length > 0) {
+        children.unshift({
+          type: 'department' as const,
+          id: `${project.id}_direct`,
+          code: '',
+          name: '直屬成員',
+          manager: null,
+          memberCount: directMembers.length,
+          members: directMembers,
+          isVirtual: true,
+        });
+      }
+
       return {
         type: 'project' as const,
-        id: project.id,
-        code: project.code,
-        name: project.name,
+        id: project.id, code: project.code, name: project.name,
         projectOwner: project.projectOwner ?? null,
-        memberCount: children.reduce((s, d) => s + d.memberCount, 0),
+        memberCount: totalCount,
         children,
       };
     };
@@ -407,20 +434,33 @@ export class OrganizationsService {
     const buildBUNode = (bu: any) => {
       const buProjects = projects.filter(p => p.businessUnitId === bu.id).map(buildProjectNode);
 
-      // departments with no project whose members belong to this BU
-      const standaloneUserIds = buStandaloneAssignments.get(bu.id) ?? new Set<string>();
-      const standaloneDepts = departments
-        .filter(d => !d.projectId && (deptMembersMap.get(d.id) ?? []).some(m => standaloneUserIds.has(m.id)))
-        .map(buildDeptNode);
+      // employees under this BU but no project assigned
+      const buMembers = membersByBU.get(bu.id) ?? [];
+      const projMemberIds = new Set(buProjects.flatMap(p => membersByProject.get(p.id) ?? []).map((m: any) => m.id));
+      const directMembers = buMembers.filter(m => !projMemberIds.has(m.id));
 
-      const children = [...buProjects, ...standaloneDepts];
+      const children: any[] = [...buProjects];
+
+      if (directMembers.length > 0) {
+        children.push({
+          type: 'department' as const,
+          id: `${bu.id}_direct`,
+          code: '',
+          name: '直屬成員',
+          manager: null,
+          memberCount: directMembers.length,
+          members: directMembers,
+          isVirtual: true,
+        });
+      }
+
+      const totalCount = buMembers.length;
+
       return {
         type: 'business_unit' as const,
-        id: bu.id,
-        code: bu.code,
-        name: bu.name,
+        id: bu.id, code: bu.code, name: bu.name,
         headUser: bu.headUser ?? null,
-        memberCount: children.reduce((s, c) => s + c.memberCount, 0),
+        memberCount: totalCount,
         children,
       };
     };

@@ -1,8 +1,8 @@
 <template>
   <div>
     <div class="page-header">
-      <h2>我的請假</h2>
-      <el-button type="primary" @click="openCreate">申請請假</el-button>
+      <h2>{{ $t('attendance.leaveRequest') }}</h2>
+      <el-button type="primary" @click="openCreate">{{ $t('common.create') }}</el-button>
     </div>
 
     <el-card>
@@ -17,7 +17,7 @@
         />
         <el-select
           v-model="statusFilter"
-          placeholder="狀態篩選"
+          :placeholder="$t('common.filter')"
           clearable
           style="width: 140px"
           @change="onSearch"
@@ -32,15 +32,15 @@
 
       <el-table v-loading="loading" :data="data" border stripe>
         <el-table-column prop="requestNo" label="單號" width="160" />
-        <el-table-column label="假別" width="120">
+        <el-table-column :label="$t('attendance.leaveType')" width="120">
           <template #default="{ row }">{{ row.leaveType?.name ?? '—' }}</template>
         </el-table-column>
         <el-table-column label="起訖" width="200">
           <template #default="{ row }">{{ row.startDate }} ~ {{ row.endDate }}</template>
         </el-table-column>
-        <el-table-column prop="totalDays" label="天數" width="80" />
+        <el-table-column prop="totalDays" :label="$t('attendance.totalDays')" width="80" />
         <el-table-column prop="reason" label="事由" show-overflow-tooltip />
-        <el-table-column label="狀態" width="100">
+        <el-table-column :label="$t('common.status')" width="100">
           <template #default="{ row }">
             <el-tag :type="leaveTagType(row.status)" size="small">
               {{ leaveLabel(row.status) }}
@@ -63,17 +63,17 @@
     </el-card>
 
     <!-- 申請請假 Dialog -->
-    <el-dialog v-model="dialogVisible" title="申請請假" width="560px">
+    <el-dialog v-model="dialogVisible" :title="$t('attendance.leaveRequest')" width="560px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-        <el-form-item label="假別" prop="leaveTypeId">
+        <el-form-item :label="$t('attendance.leaveType')" prop="leaveTypeId">
           <el-select v-model="form.leaveTypeId" placeholder="請選擇假別" style="width: 100%">
             <el-option v-for="t in leaveTypes" :key="t.id" :label="t.name" :value="t.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="起始日期" prop="startDate">
+        <el-form-item :label="$t('common.startDate')" prop="startDate">
           <el-date-picker v-model="form.startDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
-        <el-form-item label="結束日期" prop="endDate">
+        <el-form-item :label="$t('common.endDate')" prop="endDate">
           <el-date-picker v-model="form.endDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
         <el-form-item label="半天選項">
@@ -82,32 +82,34 @@
             <el-option label="下半天" value="afternoon" />
           </el-select>
         </el-form-item>
-        <el-form-item label="天數" prop="totalDays">
+        <el-form-item :label="$t('attendance.totalDays')" prop="totalDays">
           <el-input-number v-model="form.totalDays" :min="0.5" :step="0.5" :precision="1" style="width: 100%" />
         </el-form-item>
         <el-form-item label="事由" prop="reason">
           <el-input v-model="form.reason" type="textarea" :rows="3" placeholder="請輸入請假事由" />
         </el-form-item>
-        <el-form-item label="代理人">
+        <el-form-item :label="$t('attendance.proxy')">
           <el-input v-model="form.proxyName" placeholder="代理人姓名（選填）" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSave">確定送出</el-button>
+        <el-button @click="dialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="saving" @click="handleSave">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import { leavesApi } from '@/api/hr.api'
 import { useUiStore } from '@/stores/ui.store'
 import { useTable } from '@/composables/useTable'
 
 const ui = useUiStore()
+const { t } = useI18n()
 const statusFilter = ref('')
 const yearFilter = ref('')
 const leaveTypes = ref<any[]>([])
@@ -125,20 +127,20 @@ const form = reactive({
   proxyName: '',
 })
 
-const rules: FormRules = {
-  leaveTypeId: [{ required: true, message: '請選擇假別', trigger: 'change' }],
-  startDate: [{ required: true, message: '請選擇起始日期', trigger: 'change' }],
-  endDate: [{ required: true, message: '請選擇結束日期', trigger: 'change' }],
-  totalDays: [{ required: true, message: '請輸入天數', trigger: 'blur' }],
-  reason: [{ required: true, message: '請輸入請假事由', trigger: 'blur' }],
-}
+const rules = computed<FormRules>(() => ({
+  leaveTypeId: [{ required: true, message: t('common.required'), trigger: 'change' }],
+  startDate: [{ required: true, message: t('common.required'), trigger: 'change' }],
+  endDate: [{ required: true, message: t('common.required'), trigger: 'change' }],
+  totalDays: [{ required: true, message: t('common.required'), trigger: 'blur' }],
+  reason: [{ required: true, message: t('common.required'), trigger: 'blur' }],
+}))
 
 const { loading, data, total, pagination, fetch, handlePageChange, handleSizeChange } = useTable<any>({
   fetchFn: (params) => leavesApi.getAll(params as any),
 })
 
 onMounted(async () => {
-  ui.setBreadcrumbs([{ title: '人事模塊' }, { title: '我的請假' }])
+  ui.setBreadcrumbs([{ title: t('nav.hrModule') }, { title: t('attendance.leaveRequest') }])
   try {
     leaveTypes.value = await leavesApi.getTypes()
   } catch {
@@ -156,7 +158,7 @@ function onSearch() {
       endDate: yearFilter.value ? `${yearFilter.value}-12-31` : undefined,
     })
   } catch {
-    ElMessage.error('載入請假記錄失敗')
+    ElMessage.error(t('msg.loadFailed'))
   }
 }
 
@@ -179,11 +181,11 @@ async function handleSave() {
       reason: form.reason,
       proxyName: form.proxyName || undefined,
     })
-    ElMessage.success('請假申請已送出')
+    ElMessage.success(t('msg.submitSuccess'))
     dialogVisible.value = false
     onSearch()
   } catch {
-    ElMessage.error('送出失敗，請稍後再試')
+    ElMessage.error(t('msg.submitFailed'))
   } finally {
     saving.value = false
   }

@@ -17,14 +17,13 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     });
   }
 
-  async validate(payload: { sub: string; email: string; isSuperAdmin: boolean }) {
+  async validate(payload: { sub: string; email: string }) {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       select: {
         id: true,
         email: true,
         status: true,
-        isSuperAdmin: true,
         userRoles: {
           select: { role: { select: { code: true } } },
         },
@@ -38,7 +37,6 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     return {
       sub: user.id,
       email: user.email,
-      isSuperAdmin: user.isSuperAdmin,
       roles: user.userRoles.map((ur) => ur.role.code),
     };
   }

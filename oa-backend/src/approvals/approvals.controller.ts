@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Put, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ApprovalsService } from './approvals.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -95,5 +95,50 @@ export class ApprovalsController {
   @ApiOperation({ summary: 'Reject a step' })
   reject(@Param('id') id: string, @CurrentUser() user: any, @Body() dto: any) {
     return this.service.reject(id, { ...dto, approverId: user.sub });
+  }
+
+  // ── 員工審批職能角色 ──────────────────────────────────────
+
+  // ── 員工審批職能角色 ──────────────────────────────────────
+
+  @Get('employee-approver-roles/:userId')
+  @ApiOperation({ summary: '取得員工的審批職能角色列表' })
+  getEmployeeApproverRoles(@Param('userId') userId: string) {
+    return this.service.getEmployeeApproverRoles(userId);
+  }
+
+  @Get('approver-role-holder')
+  @ApiOperation({ summary: '查詢特定職能角色目前由誰擔任' })
+  findApproverRoleHolder(
+    @Query('roleType')  roleType:  string,
+    @Query('scopeType') scopeType: string,
+    @Query('scopeId')   scopeId?:  string,
+  ) {
+    return this.service.findApproverRoleHolder({ roleType, scopeType, scopeId });
+  }
+
+  @Get('approver-role-holders')
+  @ApiOperation({ summary: '列出特定公司/集團所有職能角色的持有人' })
+  listApproverRoleHolders(
+    @Query('scopeType') scopeType?: string,
+    @Query('scopeId')   scopeId?:  string,
+  ) {
+    return this.service.listApproverRoleHolders({ scopeType, scopeId });
+  }
+
+  @Post('employee-approver-roles/:userId')
+  @ApiOperation({ summary: '為員工指派審批職能角色（forceReplace=true 時轉移）' })
+  createEmployeeApproverRole(
+    @Param('userId') userId: string,
+    @Body() dto: any,
+  ) {
+    const { forceReplace, ...rest } = dto;
+    return this.service.createEmployeeApproverRole(userId, rest, !!forceReplace);
+  }
+
+  @Delete('employee-approver-roles/:roleId')
+  @ApiOperation({ summary: '移除員工審批職能角色（軟刪除）' })
+  deleteEmployeeApproverRole(@Param('roleId') roleId: string) {
+    return this.service.deleteEmployeeApproverRole(roleId);
   }
 }

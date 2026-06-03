@@ -1,30 +1,30 @@
 <template>
   <div>
     <div class="page-header">
-      <h2>我的申請進度</h2>
+      <h2>{{ $t('form.myForms') }}</h2>
     </div>
 
     <el-card>
-      <el-table v-loading="loading" :data="items" border stripe empty-text="尚無電子表單申請紀錄">
-        <el-table-column label="表單類型" width="140">
+      <el-table v-loading="loading" :data="items" border stripe :empty-text="$t('form.noRecords')">
+        <el-table-column :label="$t('form.formType')" width="140">
           <template #default="{ row }">
             <el-tag :type="formTypeTagColor(row.formType)" size="small">{{ formTypeLabel(row.formType) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="申請摘要" min-width="200">
+        <el-table-column :label="$t('form.summary')" min-width="200">
           <template #default="{ row }">
             <span class="content-summary">{{ contentSummary(row) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="狀態" width="100">
+        <el-table-column :label="$t('common.status')" width="100">
           <template #default="{ row }">
-            <el-tag :type="statusTagColor(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+            <el-tag :type="statusTagColor(row.status)" size="small">{{ $t(`status.${row.status}`) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="申請時間" width="150">
+        <el-table-column :label="$t('form.submittedAt')" width="150">
           <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
         </el-table-column>
-        <el-table-column label="更新時間" width="150">
+        <el-table-column :label="$t('common.updatedAt')" width="150">
           <template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template>
         </el-table-column>
       </el-table>
@@ -44,10 +44,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { formsApi } from '@/api/forms.api'
 import { useUiStore } from '@/stores/ui.store'
 
+const { t } = useI18n()
 const ui = useUiStore()
 
 const loading = ref(false)
@@ -57,7 +59,7 @@ const page = ref(1)
 const pageSize = 20
 
 onMounted(async () => {
-  ui.setBreadcrumbs([{ title: '電子表單' }, { title: '簽核' }])
+  ui.setBreadcrumbs([{ title: t('nav.forms') }, { title: t('form.myForms') }])
   await loadList()
 })
 

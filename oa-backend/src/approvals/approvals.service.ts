@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -250,14 +250,19 @@ export class ApprovalsService {
   async replaceTemplateSteps(id: string, steps: Array<{
     stepOrder: number;
     stepName: string;
-    approverType: string;
     approvalMode: string;
     isRequired?: boolean;
+    allowDynamicAdding?: boolean;
+    approvers: Array<{
+      approverType: string;
+      approverUserId?: string;
+      approverRoleCode?: string;
+      scopeConfig?: Record<string, unknown>;
+    }>;
   }>) {
-    await this.getTemplate(id); // throws 404 if not found
+    await this.getTemplate(id);
 
     return this.prisma.$transaction(async (tx) => {
-      // Delete existing approvers then steps
       const existingSteps = await tx.approvalTemplateStep.findMany({
         where: { approvalTemplateId: id },
         select: { id: true },
@@ -269,23 +274,32 @@ export class ApprovalsService {
         await tx.approvalTemplateStep.deleteMany({ where: { approvalTemplateId: id } });
       }
 
-      // Create new steps
       for (const step of steps) {
         const created = await tx.approvalTemplateStep.create({
           data: {
             approvalTemplateId: id,
-            stepOrder: step.stepOrder,
-            stepName: step.stepName,
-            approvalMode: step.approvalMode,
-            isRequired: step.isRequired ?? true,
+            stepOrder:          step.stepOrder,
+            stepName:           step.stepName,
+            approvalMode:       step.approvalMode,
+            isRequired:         step.isRequired ?? true,
+            allowDynamicAdding: step.allowDynamicAdding ?? false,
           },
         });
-        await tx.approvalTemplateStepApprover.create({
-          data: {
-            approvalTemplateStepId: created.id,
-            approverType: step.approverType,
-          },
-        });
+        const approverList = step.approvers?.length
+          ? step.approvers
+          : [{ approverType: 'applicant_direct_manager' }];
+
+        for (const approver of approverList) {
+          await tx.approvalTemplateStepApprover.create({
+            data: {
+              approvalTemplateStepId: created.id,
+              approverType:     approver.approverType,
+              approverUserId:   approver.approverUserId   ?? null,
+              approverRoleCode: approver.approverRoleCode ?? null,
+              scopeConfig:      (approver.scopeConfig ?? undefined) as any,
+            },
+          });
+        }
       }
 
       return tx.approvalTemplate.findUnique({
@@ -294,6 +308,132 @@ export class ApprovalsService {
           steps: { include: { approvers: true }, orderBy: { stepOrder: 'asc' } },
         },
       });
+    });
+  }
+
+  // ── 員工審批職能角色 ──────────────────────────────────────
+
+  async getEmployeeApproverRoles(userId: string) {
+    return this.prisma.employeeApproverRole.findMany({
+      where: { userId, isActive: true },
+      include: {
+        user: { select: { id: true, displayName: true, employeeNo: true } },
+        company: { select: { id: true, name: true, code: true } },
+      },
+      orderBy: [{ scopeType: 'asc' }, { roleType: 'asc' }],
+    });
+  }
+
+  /**
+   * 查詢特定職能角色目前由誰擔任（用於前端顯示衝突資訊）
+   * roleType + scopeType + scopeId 組合全系統只能有一個啟用記錄
+   */
+  async findApproverRoleHolder(dto: { roleType: string; scopeType: string; scopeId?: string }) {
+    return this.prisma.employeeApproverRole.findFirst({
+      where: {
+        roleType:  dto.roleType,
+        scopeType: dto.scopeType,
+        scopeId:   dto.scopeId ?? null,
+        isActive:  true,
+      },
+      include: {
+        user:    { select: { id: true, displayName: true, employeeNo: true } },
+        company: { select: { id: true, name: true } },
+      },
+    });
+  }
+
+  /**
+   * 為員工指派審批職能角色
+   * - 每個 (roleType + scopeType + scopeId) 全系統只能有一個啟用記錄
+   * - forceReplace=false：若有人持有則拋出 409，附帶現持有人資訊
+   * - forceReplace=true ：先停用現持有人，再指派給新員工（轉移）
+   */
+  async createEmployeeApproverRole(
+    userId: string,
+    dto: { roleType: string; scopeType: string; scopeId?: string; startedAt?: string; endedAt?: string },
+    forceReplace = false,
+  ) {
+    const scopeId = dto.scopeId ?? null;
+
+    // 檢查是否已有其他人持有此角色
+    const existing = await this.prisma.employeeApproverRole.findFirst({
+      where: {
+        roleType:  dto.roleType,
+        scopeType: dto.scopeType,
+        scopeId,
+        isActive:  true,
+        userId:    { not: userId },   // 排除自己（同人重複設定不算衝突）
+      },
+      include: {
+        user: { select: { id: true, displayName: true, employeeNo: true } },
+      },
+    });
+
+    if (existing && !forceReplace) {
+      throw new ConflictException({
+        message: `此角色已由 ${existing.user.displayName}（工號 ${existing.user.employeeNo}）擔任`,
+        currentHolder: {
+          roleRecordId: existing.id,
+          userId:       existing.userId,
+          displayName:  existing.user.displayName,
+          employeeNo:   existing.user.employeeNo,
+        },
+      });
+    }
+
+    if (existing && forceReplace) {
+      // 停用原持有人
+      await this.prisma.employeeApproverRole.update({
+        where: { id: existing.id },
+        data:  { isActive: false, endedAt: new Date() },
+      });
+    }
+
+    // 檢查同一員工是否已持有此角色（避免重複指派）
+    const selfExisting = await this.prisma.employeeApproverRole.findFirst({
+      where: { roleType: dto.roleType, scopeType: dto.scopeType, scopeId, userId, isActive: true },
+    });
+    if (selfExisting) {
+      return selfExisting; // 已存在，直接返回，不報錯
+    }
+
+    return this.prisma.employeeApproverRole.create({
+      data: {
+        userId,
+        roleType:  dto.roleType,
+        scopeType: dto.scopeType,
+        scopeId,
+        startedAt: dto.startedAt ? new Date(dto.startedAt) : null,
+        endedAt:   dto.endedAt   ? new Date(dto.endedAt)   : null,
+      },
+      include: {
+        user:    { select: { id: true, displayName: true, employeeNo: true } },
+        company: { select: { id: true, name: true, code: true } },
+      },
+    });
+  }
+
+  async deleteEmployeeApproverRole(roleId: string) {
+    return this.prisma.employeeApproverRole.update({
+      where: { id: roleId },
+      data:  { isActive: false, endedAt: new Date() },
+    });
+  }
+
+  /** 查詢某公司/集團所有審批職能角色的當前持有人 */
+  async listApproverRoleHolders(params: { scopeType?: string; scopeId?: string }) {
+    return this.prisma.employeeApproverRole.findMany({
+      where: {
+        isActive:  true,
+        ...(params.scopeType ? { scopeType: params.scopeType } : {}),
+        ...(params.scopeId   ? { scopeId:   params.scopeId   } : {}),
+      },
+      include: {
+        user:    { select: { id: true, displayName: true, employeeNo: true, avatarUrl: true } },
+        company: { select: { id: true, name: true, code: true } },
+      },
+      orderBy: [{ roleType: 'asc' }, { scopeType: 'asc' }],
     });
   }
 }

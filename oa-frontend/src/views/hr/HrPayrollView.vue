@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-header">
-      <h2>薪資管理</h2>
+      <h2>{{ $t('nav.hrPayroll') }}</h2>
       <el-button v-if="activeTab === 'periods'" type="primary" @click="openCreatePeriod">
         建立新期間
       </el-button>
@@ -11,7 +11,7 @@
       <el-tabs v-model="activeTab" @tab-change="onTabChange">
 
         <!-- Tab 1: 薪資期間 -->
-        <el-tab-pane label="薪資期間" name="periods">
+        <el-tab-pane :label="$t('hr.payrollPeriod')" name="periods">
           <div class="toolbar">
             <el-input-number
               v-model="yearFilter"
@@ -42,14 +42,14 @@
               <template #default="{ row }">{{ row.periodStart }} ~ {{ row.periodEnd }}</template>
             </el-table-column>
             <el-table-column prop="payDate" label="發薪日" width="120" />
-            <el-table-column label="狀態" width="110">
+            <el-table-column :label="$t('common.status')" width="110">
               <template #default="{ row }">
                 <el-tag :type="periodTagType(row.status)" size="small">
                   {{ periodLabel(row.status) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="200" fixed="right">
+            <el-table-column :label="$t('common.actions')" width="200" fixed="right">
               <template #default="{ row }">
                 <el-button
                   v-if="['draft', 'calculating'].includes(row.status)"
@@ -87,7 +87,7 @@
         </el-tab-pane>
 
         <!-- Tab 2: 薪資明細 -->
-        <el-tab-pane label="薪資明細" name="records">
+        <el-tab-pane :label="$t('hr.payrollRecord')" name="records">
           <div class="toolbar">
             <el-select
               v-model="selectedPeriodId"
@@ -113,28 +113,28 @@
           </div>
 
           <el-table v-loading="recordsLoading" :data="recordsData" border stripe>
-            <el-table-column prop="employeeName" label="員工姓名" width="120" />
+            <el-table-column prop="employeeName" :label="$t('user.displayName')" width="120" />
             <el-table-column label="期間" width="120">
               <template #default="{ row }">
                 {{ row.period ? `${row.period.year}年${row.period.month}月` : '—' }}
               </template>
             </el-table-column>
-            <el-table-column label="基本薪資" width="130">
+            <el-table-column :label="$t('hr.baseSalary')" width="130">
               <template #default="{ row }">{{ formatAmount(row.baseSalary) }}</template>
             </el-table-column>
-            <el-table-column label="加班費" width="110">
+            <el-table-column :label="$t('attendance.payOT')" width="110">
               <template #default="{ row }">{{ formatAmount(row.overtimePay) }}</template>
             </el-table-column>
-            <el-table-column label="應發合計" width="120">
+            <el-table-column :label="$t('hr.grossSalary')" width="120">
               <template #default="{ row }">{{ formatAmount(row.grossSalary) }}</template>
             </el-table-column>
             <el-table-column label="扣款合計" width="120">
               <template #default="{ row }">{{ formatAmount(row.totalDeductions) }}</template>
             </el-table-column>
-            <el-table-column label="實發薪資" width="120">
+            <el-table-column :label="$t('hr.netSalary')" width="120">
               <template #default="{ row }">{{ formatAmount(row.netSalary) }}</template>
             </el-table-column>
-            <el-table-column prop="currencyCode" label="幣別" width="80" />
+            <el-table-column prop="currencyCode" :label="$t('common.currency')" width="80" />
           </el-table>
 
           <el-pagination
@@ -181,11 +181,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { payrollApi } from '@/api/hr.api'
 import { useUiStore } from '@/stores/ui.store'
 import { useTable } from '@/composables/useTable'
 
+const { t } = useI18n()
 const ui = useUiStore()
 const activeTab = ref('periods')
 
@@ -258,7 +260,7 @@ const createFormRef = ref<FormInstance>()
 const createForm = reactive({ year: new Date().getFullYear(), month: new Date().getMonth() + 1, periodStart: '', periodEnd: '', payDate: '' })
 
 onMounted(async () => {
-  ui.setBreadcrumbs([{ title: '人事模塊' }, { title: '薪資管理' }])
+  ui.setBreadcrumbs([{ title: t('nav.hrModule') }, { title: t('nav.hrPayroll') }])
   fetchPeriods()
   try {
     const result = await payrollApi.getPeriods({ limit: 100 })

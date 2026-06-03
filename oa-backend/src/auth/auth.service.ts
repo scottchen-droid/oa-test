@@ -29,7 +29,6 @@ export class AuthService {
         displayName: true,
         nameZh: true,
         nameEn: true,
-        isSuperAdmin: true,
         status: true,
         avatarUrl: true,
         userRoles: { select: { role: { select: { code: true, name: true } } } },
@@ -49,7 +48,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const tokens = await this.generateTokens(user.id, user.email, user.isSuperAdmin);
+    const tokens = await this.generateTokens(user.id, user.email);
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -66,7 +65,7 @@ export class AuthService {
   async refreshToken(token: string) {
     const user = await this.prisma.user.findFirst({
       where: { refreshToken: token },
-      select: { id: true, email: true, isSuperAdmin: true, status: true },
+      select: { id: true, email: true, status: true },
     });
 
     if (!user || user.status === 'suspended' || user.status === 'terminated') {
@@ -81,7 +80,7 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token expired');
     }
 
-    const tokens = await this.generateTokens(user.id, user.email, user.isSuperAdmin);
+    const tokens = await this.generateTokens(user.id, user.email);
     await this.prisma.user.update({
       where: { id: user.id },
       data: { refreshToken: tokens.refreshToken },
@@ -162,8 +161,8 @@ export class AuthService {
     });
   }
 
-  private async generateTokens(userId: string, email: string, isSuperAdmin: boolean) {
-    const payload = { sub: userId, email, isSuperAdmin };
+  private async generateTokens(userId: string, email: string) {
+    const payload = { sub: userId, email };
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {

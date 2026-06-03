@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-header">
-      <h2>出勤管理</h2>
+      <h2>{{ $t('nav.hrAttendance') }}</h2>
     </div>
 
     <el-card>
@@ -10,8 +10,8 @@
           v-model="dateRange"
           type="daterange"
           range-separator="至"
-          start-placeholder="開始日期"
-          end-placeholder="結束日期"
+          :start-placeholder="$t('common.startDate')"
+          :end-placeholder="$t('common.endDate')"
           value-format="YYYY-MM-DD"
           style="width: 260px"
           @change="onSearch"
@@ -25,12 +25,12 @@
         />
         <el-select
           v-model="statusFilter"
-          placeholder="狀態篩選"
+          :placeholder="$t('common.filter')"
           clearable
           style="width: 140px"
           @change="onSearch"
         >
-          <el-option label="正常" value="normal" />
+          <el-option :label="$t('status.normal')" value="normal" />
           <el-option label="遲到" value="late" />
           <el-option label="缺勤" value="absent" />
           <el-option label="請假" value="leave" />
@@ -87,11 +87,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { attendanceApi } from '@/api/hr.api'
 import { useUiStore } from '@/stores/ui.store'
 import { useTable } from '@/composables/useTable'
 
+const { t } = useI18n()
 const ui = useUiStore()
 const dateRange = ref<[string, string] | null>(null)
 const userSearch = ref('')

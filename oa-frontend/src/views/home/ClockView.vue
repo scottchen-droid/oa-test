@@ -1,7 +1,7 @@
 <template>
   <div class="clock-page">
     <div class="page-header">
-      <h2>打卡</h2>
+      <h2>{{ $t('nav.clock') }}</h2>
     </div>
 
     <el-card class="clock-card">
@@ -12,14 +12,14 @@
         <div class="today-status" v-if="todayRecord">
           <div class="status-item" :class="{ done: !!todayRecord.actualClockIn }">
             <el-icon size="20"><Timer /></el-icon>
-            <span class="label">上班打卡</span>
-            <span class="time">{{ todayRecord.actualClockIn ? formatTime(todayRecord.actualClockIn) : '未打卡' }}</span>
+            <span class="label">{{ $t('attendance.clockIn') }}</span>
+            <span class="time">{{ todayRecord.actualClockIn ? formatTime(todayRecord.actualClockIn) : $t('attendance.notClocked') }}</span>
           </div>
           <div class="status-divider" />
           <div class="status-item" :class="{ done: !!todayRecord.actualClockOut }">
             <el-icon size="20"><Check /></el-icon>
-            <span class="label">下班打卡</span>
-            <span class="time">{{ todayRecord.actualClockOut ? formatTime(todayRecord.actualClockOut) : '未打卡' }}</span>
+            <span class="label">{{ $t('attendance.clockOut') }}</span>
+            <span class="time">{{ todayRecord.actualClockOut ? formatTime(todayRecord.actualClockOut) : $t('attendance.notClocked') }}</span>
           </div>
         </div>
 
@@ -32,7 +32,7 @@
             :disabled="!!todayRecord?.actualClockIn"
             @click="handleClockIn"
           >
-            {{ todayRecord?.actualClockIn ? '已上班打卡' : '上班打卡' }}
+            {{ todayRecord?.actualClockIn ? $t('attendance.clockedIn') : $t('attendance.clockIn') }}
           </el-button>
           <el-button
             type="success"
@@ -42,7 +42,7 @@
             :disabled="!todayRecord?.actualClockIn || !!todayRecord?.actualClockOut"
             @click="handleClockOut"
           >
-            {{ todayRecord?.actualClockOut ? '已下班打卡' : '下班打卡' }}
+            {{ todayRecord?.actualClockOut ? $t('attendance.clockedOut') : $t('attendance.clockOut') }}
           </el-button>
         </div>
 
@@ -58,10 +58,12 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Timer, Check } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
 import { attendanceApi } from '@/api/hr.api'
 import { useUiStore } from '@/stores/ui.store'
 
 const ui = useUiStore()
+const { t } = useI18n()
 const clockingIn = ref(false)
 const clockingOut = ref(false)
 const todayRecord = ref<any>(null)
@@ -72,7 +74,7 @@ const lastMessageType = ref<'success' | 'error'>('success')
 let timer: ReturnType<typeof setInterval> | null = null
 
 onMounted(async () => {
-  ui.setBreadcrumbs([{ title: '考勤管理' }, { title: '打卡' }])
+  ui.setBreadcrumbs([{ title: t('nav.attendance') }, { title: t('nav.clock') }])
   updateClock()
   timer = setInterval(updateClock, 1000)
   await loadToday()
@@ -101,12 +103,12 @@ async function handleClockIn() {
   lastMessage.value = ''
   try {
     await attendanceApi.clockIn({ clockMethod: 'web' })
-    ElMessage.success('上班打卡成功')
-    lastMessage.value = `上班打卡成功：${new Date().toLocaleTimeString('zh-TW', { hour12: false })}`
+    ElMessage.success(t('msg.operationSuccess'))
+    lastMessage.value = `${t('attendance.clockIn')}：${new Date().toLocaleTimeString('zh-TW', { hour12: false })}`
     lastMessageType.value = 'success'
     await loadToday()
   } catch (err: any) {
-    const msg = err?.response?.data?.message ?? '打卡失敗，請稍後再試'
+    const msg = err?.response?.data?.message ?? t('msg.loadFailed')
     ElMessage.error(msg)
     lastMessage.value = msg
     lastMessageType.value = 'error'
@@ -120,12 +122,12 @@ async function handleClockOut() {
   lastMessage.value = ''
   try {
     await attendanceApi.clockOut({ clockMethod: 'web' })
-    ElMessage.success('下班打卡成功')
-    lastMessage.value = `下班打卡成功：${new Date().toLocaleTimeString('zh-TW', { hour12: false })}`
+    ElMessage.success(t('msg.operationSuccess'))
+    lastMessage.value = `${t('attendance.clockOut')}：${new Date().toLocaleTimeString('zh-TW', { hour12: false })}`
     lastMessageType.value = 'success'
     await loadToday()
   } catch (err: any) {
-    const msg = err?.response?.data?.message ?? '打卡失敗，請稍後再試'
+    const msg = err?.response?.data?.message ?? t('msg.loadFailed')
     ElMessage.error(msg)
     lastMessage.value = msg
     lastMessageType.value = 'error'

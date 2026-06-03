@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { authApi } from '@/api/auth.api'
 import { usersApi } from '@/api/users.api'
 import type { User } from '@/types'
+import { setLocale, type SupportedLocale } from '@/i18n'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
@@ -35,6 +36,15 @@ export const useAuthStore = defineStore('auth', () => {
     return roleCodes.value.some((r) => managerRoles.includes(r))
   })
 
+  function applyLocaleFromUser(u: User | null) {
+    if (!u) return
+    const primaryOrg = u.orgAssignments?.find((a: any) => a.isPrimary)
+    const regionLocale = (primaryOrg?.company as any)?.region?.defaultLocale as SupportedLocale | undefined
+    if (regionLocale && ['zh-TW', 'zh-CN', 'en'].includes(regionLocale)) {
+      setLocale(regionLocale)
+    }
+  }
+
   async function login(account: string, password: string) {
     const result = await authApi.login(account, password)
     accessToken.value = result.accessToken
@@ -42,6 +52,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = result.user
     localStorage.setItem('access_token', result.accessToken)
     localStorage.setItem('refresh_token', result.refreshToken)
+    // Locale is set after fetchCurrentUser (which has full org data)
   }
 
   async function logout() {
@@ -57,6 +68,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const me = await usersApi.getOne('me')
       user.value = me
+      applyLocaleFromUser(me)
     } catch {
       clearAuth()
     }
@@ -92,5 +104,6 @@ export const useAuthStore = defineStore('auth', () => {
     fetchCurrentUser,
     clearAuth,
     setTokens,
+    applyLocaleFromUser,
   }
 })

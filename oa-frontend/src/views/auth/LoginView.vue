@@ -2,32 +2,26 @@
   <div class="login-page">
     <div class="login-card">
       <div class="login-header">
-        <h1>OA System</h1>
-        <p>企業辦公自動化平台</p>
+        <h1>{{ $t('auth.loginTitle') }}</h1>
+        <p>{{ $t('auth.loginSubtitle') }}</p>
       </div>
 
-      <el-form
-        ref="formRef"
-        :model="form"
-        :rules="rules"
-        label-position="top"
-        @submit.prevent="handleLogin"
-      >
-        <el-form-item label="帳號 / 工號" prop="account">
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @submit.prevent="handleLogin">
+        <el-form-item :label="$t('auth.account')" prop="account">
           <el-input
             v-model="form.account"
             type="text"
-            placeholder="請輸入工號或電子郵件"
+            :placeholder="$t('auth.accountPlaceholder')"
             size="large"
             :prefix-icon="Message"
           />
         </el-form-item>
 
-        <el-form-item label="密碼" prop="password">
+        <el-form-item :label="$t('auth.password')" prop="password">
           <el-input
             v-model="form.password"
             type="password"
-            placeholder="請輸入密碼"
+            :placeholder="$t('auth.passwordPlaceholder')"
             size="large"
             show-password
             :prefix-icon="Lock"
@@ -36,19 +30,27 @@
         </el-form-item>
 
         <div class="forgot-link">
-          <RouterLink to="/forgot-password">忘記密碼？</RouterLink>
+          <RouterLink to="/forgot-password">{{ $t('auth.forgotPassword') }}？</RouterLink>
         </div>
 
-        <el-button
-          type="primary"
-          size="large"
-          :loading="loading"
-          class="login-btn"
-          @click="handleLogin"
-        >
-          登入
+        <el-button type="primary" size="large" :loading="loading" class="login-btn" @click="handleLogin">
+          {{ loading ? $t('auth.loggingIn') : $t('auth.loginButton') }}
         </el-button>
       </el-form>
+
+      <!-- 語系切換 -->
+      <div class="locale-bar">
+        <el-button
+          v-for="loc in SUPPORTED_LOCALES"
+          :key="loc.value"
+          text
+          size="small"
+          :class="{ 'is-active': locale === loc.value }"
+          @click="switchLocale(loc.value)"
+        >
+          {{ loc.label }}
+        </el-button>
+      </div>
     </div>
   </div>
 </template>
@@ -56,22 +58,27 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Message, Lock } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth.store'
+import { setLocale, SUPPORTED_LOCALES, type SupportedLocale } from '@/i18n'
 
 const router = useRouter()
-const route = useRoute()
-const auth = useAuthStore()
+const route  = useRoute()
+const auth   = useAuthStore()
+const { t, locale } = useI18n()
 
 const formRef = ref<FormInstance>()
 const loading = ref(false)
-const form = reactive({ account: '', password: '' })
+const form    = reactive({ account: '', password: '' })
 
 const rules: FormRules = {
-  account: [{ required: true, message: '請輸入帳號', trigger: 'blur' }],
-  password: [{ required: true, message: '請輸入密碼', trigger: 'blur' }],
+  account:  [{ required: true, message: t('common.required'), trigger: 'blur' }],
+  password: [{ required: true, message: t('common.required'), trigger: 'blur' }],
 }
+
+function switchLocale(loc: SupportedLocale) { setLocale(loc) }
 
 async function handleLogin() {
   const valid = await formRef.value?.validate().catch(() => false)
@@ -80,12 +87,13 @@ async function handleLogin() {
   loading.value = true
   try {
     await auth.login(form.account, form.password)
-    const redirect = (route.query.redirect as string) || '/dashboard'
+    // After login, fetch full user profile to detect locale from region
+    await auth.fetchCurrentUser()
+    const redirect = (route.query.redirect as string) || '/home'
     router.push(redirect)
   } catch (err: any) {
-    // interceptor 已對非 401 錯誤顯示 toast，這裡只補 401（帳密錯誤）和無回應（網路錯誤）
     if (!err.response || err.response.status === 401) {
-      ElMessage.error('帳號或密碼錯誤，請重新確認')
+      ElMessage.error(t('auth.loginFailed'))
     }
   } finally {
     loading.value = false
@@ -101,45 +109,26 @@ async function handleLogin() {
   justify-content: center;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
-
 .login-card {
   width: 420px;
   background: #fff;
   border-radius: 12px;
-  padding: 48px 40px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  padding: 48px 40px 32px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
 }
-
-.login-header {
-  text-align: center;
-  margin-bottom: 36px;
+.login-header { text-align: center; margin-bottom: 36px; }
+.login-header h1 { font-size: 28px; font-weight: 700; color: #333; margin: 0 0 8px; }
+.login-header p  { font-size: 14px; color: #999; margin: 0; }
+.forgot-link { text-align: right; margin-bottom: 24px; }
+.forgot-link a { font-size: 13px; color: #409eff; text-decoration: none; }
+.login-btn { width: 100%; }
+.locale-bar {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
 }
-
-.login-header h1 {
-  font-size: 28px;
-  font-weight: 700;
-  color: #333;
-  margin: 0 0 8px;
-}
-
-.login-header p {
-  font-size: 14px;
-  color: #999;
-  margin: 0;
-}
-
-.forgot-link {
-  text-align: right;
-  margin-bottom: 24px;
-}
-
-.forgot-link a {
-  font-size: 13px;
-  color: #409eff;
-  text-decoration: none;
-}
-
-.login-btn {
-  width: 100%;
-}
+.locale-bar :deep(.el-button.is-active) { color: #409eff; font-weight: 600; }
 </style>

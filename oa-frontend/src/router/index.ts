@@ -259,49 +259,21 @@ const router = createRouter({
           component: Placeholder,
           meta: { title: '使用者角色', module: 'system' },
         },
-        // 組織架構
+        // 組織架構（統一入口，Tab 切換各功能）
         {
-          path: 'system/org/regions',
-          name: 'Regions',
-          component: () => import('@/views/org/RegionsView.vue'),
-          meta: { title: '地區管理', module: 'system' },
+          path: 'system/org',
+          name: 'OrgManagement',
+          component: () => import('@/views/org/OrgManagementView.vue'),
+          meta: { title: '組織架構', module: 'system' },
         },
-        {
-          path: 'system/org/companies',
-          name: 'Companies',
-          component: () => import('@/views/org/CompaniesView.vue'),
-          meta: { title: '公司管理', module: 'system' },
-        },
-        {
-          path: 'system/org/departments',
-          name: 'Departments',
-          component: () => import('@/views/org/DepartmentsView.vue'),
-          meta: { title: '部門管理', module: 'system' },
-        },
-        {
-          path: 'system/org/business-units',
-          name: 'BusinessUnits',
-          component: () => import('@/views/org/BusinessUnitsView.vue'),
-          meta: { title: '業務單位', module: 'system' },
-        },
-        {
-          path: 'system/org/projects',
-          name: 'Projects',
-          component: () => import('@/views/org/ProjectsView.vue'),
-          meta: { title: '項目管理', module: 'system' },
-        },
-        {
-          path: 'system/org/positions',
-          name: 'Positions',
-          component: () => import('@/views/org/PositionsView.vue'),
-          meta: { title: '職位管理', module: 'system' },
-        },
-        {
-          path: 'system/org/job-levels',
-          name: 'JobLevels',
-          component: () => import('@/views/org/JobLevelsView.vue'),
-          meta: { title: '職級管理', module: 'system' },
-        },
+        // 舊子路由保留為重導向（向後相容）
+        { path: 'system/org/regions',       redirect: '/system/org' },
+        { path: 'system/org/companies',     redirect: '/system/org' },
+        { path: 'system/org/departments',   redirect: '/system/org' },
+        { path: 'system/org/business-units',redirect: '/system/org' },
+        { path: 'system/org/projects',      redirect: '/system/org' },
+        { path: 'system/org/positions',     redirect: '/system/org' },
+        { path: 'system/org/job-levels',    redirect: '/system/org' },
         // 系統設定
         {
           path: 'system/workflows',

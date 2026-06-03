@@ -1,28 +1,28 @@
 <template>
   <div>
     <div class="page-header">
-      <h2>假期管理</h2>
+      <h2>{{ $t('nav.hrLeaves') }}</h2>
     </div>
 
     <el-tabs v-model="activeTab">
       <!-- 請假申請列表 -->
-      <el-tab-pane label="請假申請" name="requests">
+      <el-tab-pane :label="$t('attendance.leaveRequest')" name="requests">
         <el-card>
           <div class="toolbar">
             <el-date-picker
               v-model="dateRange"
               type="daterange"
               range-separator="至"
-              start-placeholder="開始日期"
-              end-placeholder="結束日期"
+              :start-placeholder="$t('common.startDate')"
+              :end-placeholder="$t('common.endDate')"
               value-format="YYYY-MM-DD"
               style="width: 260px"
               @change="onSearch"
             />
-            <el-select v-model="leaveTypeFilter" placeholder="假別" clearable style="width: 160px" @change="onSearch">
+            <el-select v-model="leaveTypeFilter" :placeholder="$t('attendance.leaveType')" clearable style="width: 160px" @change="onSearch">
               <el-option v-for="t in leaveTypes" :key="t.id" :label="t.name" :value="t.id" />
             </el-select>
-            <el-select v-model="statusFilter" placeholder="狀態篩選" clearable style="width: 140px" @change="onSearch">
+            <el-select v-model="statusFilter" :placeholder="$t('common.filter')" clearable style="width: 140px" @change="onSearch">
               <el-option label="草稿" value="draft" />
               <el-option label="審核中" value="submitted" />
               <el-option label="核准" value="approved" />
@@ -35,20 +35,20 @@
             <el-table-column label="員工姓名" width="120">
               <template #default="{ row }">{{ row.user?.displayName ?? '—' }}</template>
             </el-table-column>
-            <el-table-column label="假別" width="120">
+            <el-table-column :label="$t('attendance.leaveType')" width="120">
               <template #default="{ row }">{{ row.leaveType?.name ?? '—' }}</template>
             </el-table-column>
             <el-table-column label="起訖日期" width="200">
               <template #default="{ row }">{{ formatDate(row.startDate) }} ~ {{ formatDate(row.endDate) }}</template>
             </el-table-column>
-            <el-table-column prop="totalDays" label="天數" width="80" />
+            <el-table-column prop="totalDays" :label="$t('attendance.totalDays')" width="80" />
             <el-table-column prop="reason" label="事由" show-overflow-tooltip />
-            <el-table-column label="狀態" width="100">
+            <el-table-column :label="$t('common.status')" width="100">
               <template #default="{ row }">
                 <el-tag :type="leaveTagType(row.status)" size="small">{{ leaveLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="160" fixed="right">
+            <el-table-column :label="$t('common.actions')" width="160" fixed="right">
               <template #default="{ row }">
                 <template v-if="row.status === 'submitted'">
                   <el-button size="small" type="success" @click="handleApprove(row)">核准</el-button>
@@ -76,14 +76,14 @@
       <el-tab-pane label="假期餘額" name="balances">
         <el-card>
           <div class="toolbar">
-            <el-input v-model="balanceSearch" placeholder="搜尋員工工號/姓名" clearable style="width: 220px" @change="loadBalances" />
+            <el-input v-model="balanceSearch" :placeholder="$t('common.search')" clearable style="width: 220px" @change="loadBalances" />
             <el-date-picker v-model="balanceYear" type="year" placeholder="年份" value-format="YYYY" style="width: 140px" @change="loadBalances" />
           </div>
           <el-table v-loading="balanceLoading" :data="balances" border stripe>
             <el-table-column label="員工" width="140">
               <template #default="{ row }">{{ row.user?.displayName ?? '—' }}</template>
             </el-table-column>
-            <el-table-column label="假別" width="100">
+            <el-table-column :label="$t('attendance.leaveType')" width="100">
               <template #default="{ row }">{{ row.leaveType?.name ?? '—' }}</template>
             </el-table-column>
             <el-table-column prop="year" label="年度" width="80" />
@@ -131,9 +131,9 @@
               <template #default="{ row }">{{ row.isAnnual ? '是' : '否' }}</template>
             </el-table-column>
             <el-table-column prop="description" label="說明" show-overflow-tooltip />
-            <el-table-column label="狀態" width="80">
+            <el-table-column :label="$t('common.status')" width="80">
               <template #default="{ row }">
-                <el-tag :type="row.isActive ? 'success' : 'danger'" size="small">{{ row.isActive ? '啟用' : '停用' }}</el-tag>
+                <el-tag :type="row.isActive ? 'success' : 'danger'" size="small">{{ row.isActive ? $t('status.active') : $t('status.inactive') }}</el-tag>
               </template>
             </el-table-column>
           </el-table>
@@ -149,8 +149,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="rejectDialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="actionLoading" @click="confirmReject">確認駁回</el-button>
+        <el-button @click="rejectDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="danger" :loading="actionLoading" @click="confirmReject">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -159,11 +159,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import { leavesApi } from '@/api/hr.api'
 import { useUiStore } from '@/stores/ui.store'
 import { useTable } from '@/composables/useTable'
 
 const ui = useUiStore()
+const { t } = useI18n()
 const activeTab = ref('requests')
 const dateRange = ref<[string, string] | null>(null)
 const leaveTypeFilter = ref('')
@@ -185,7 +187,7 @@ const { loading, data, total, pagination, fetch, handlePageChange, handleSizeCha
 })
 
 onMounted(async () => {
-  ui.setBreadcrumbs([{ title: '人事模塊' }, { title: '假期管理' }])
+  ui.setBreadcrumbs([{ title: t('nav.hrModule') }, { title: t('nav.hrLeaves') }])
   try {
     const result = await leavesApi.getTypes()
     leaveTypes.value = result?.items ?? result ?? []
@@ -214,7 +216,7 @@ async function loadBalances() {
     balances.value = result?.items ?? result ?? []
   } catch {
     balances.value = []
-    ElMessage.error('載入假期餘額失敗')
+    ElMessage.error(t('msg.loadFailed'))
   } finally {
     balanceLoading.value = false
   }
@@ -224,11 +226,11 @@ async function handleApprove(row: any) {
   actionLoading.value = true
   try {
     await leavesApi.approve(row.id)
-    ElMessage.success('已核准')
+    ElMessage.success(t('msg.approveSuccess'))
     fetch()
     loadBalances()
   } catch {
-    ElMessage.error('操作失敗')
+    ElMessage.error(t('msg.operationFailed'))
   } finally {
     actionLoading.value = false
   }
@@ -248,12 +250,12 @@ async function confirmReject() {
   actionLoading.value = true
   try {
     await leavesApi.reject(rejectTarget.value.id, rejectReason.value)
-    ElMessage.success('已駁回')
+    ElMessage.success(t('msg.rejectSuccess'))
     rejectDialogVisible.value = false
     fetch()
     loadBalances()
   } catch {
-    ElMessage.error('操作失敗')
+    ElMessage.error(t('msg.operationFailed'))
   } finally {
     actionLoading.value = false
   }

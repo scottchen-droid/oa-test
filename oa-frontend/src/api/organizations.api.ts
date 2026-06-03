@@ -47,8 +47,8 @@ export const companiesApi = {
 }
 
 export const departmentsApi = {
-  async getTree(companyId: string): Promise<Department[]> {
-    const { data } = await client.get('/api/departments', { params: { companyId } })
+  async getTree(companyId?: string): Promise<Department[]> {
+    const { data } = await client.get('/api/departments', { params: companyId ? { companyId } : {} })
     return data.data
   },
   async getMembers(id: string) {

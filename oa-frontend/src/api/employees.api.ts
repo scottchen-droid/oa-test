@@ -50,6 +50,21 @@ export const employeesApi = {
     await client.patch(`/api/employees/${id}/sensitive`, payload)
   },
 
+  async updateOrgAssignment(id: string, payload: {
+    regionId?: string
+    companyId?: string
+    businessUnitId?: string
+    projectId?: string
+    departmentId?: string
+    positionId?: string
+    jobLevelId?: string
+    directManagerUserId?: string
+    assignmentType?: string
+  }): Promise<User> {
+    const { data } = await client.patch(`/api/employees/${id}/org-assignment`, payload)
+    return data.data
+  },
+
   async offboard(id: string, payload: {
     resignationDate: string
     lastWorkingDate: string

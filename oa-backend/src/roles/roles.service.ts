@@ -1,19 +1,36 @@
 import { Injectable, NotFoundException, ConflictException, OnModuleInit } from '@nestjs/common';
+import { IsString, IsOptional, IsArray, IsUUID, Matches } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
 
 export class CreateRoleDto {
+  @IsString()
+  @Matches(/^[A-Z][A-Z0-9_]*$/, { message: '代碼只能包含大寫英文、數字和底線，且必須以大寫字母開頭' })
   code: string;
+
+  @IsString()
   name: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
 }
 
 export class AssignPermissionsDto {
+  @IsArray()
+  @IsUUID('4', { each: true })
   permissionIds: string[];
 }
 
 export class AssignRoleDto {
+  @IsUUID('4')
   roleId: string;
+
+  @IsOptional()
+  @IsString()
   scopeType?: string;
+
+  @IsOptional()
+  @IsUUID('4')
   scopeId?: string;
 }
 
@@ -199,7 +216,6 @@ export class RolesService implements OnModuleInit {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
-        isSuperAdmin: true,
         userRoles: {
           select: { role: { select: { rolePermissions: { select: { permission: { select: { code: true } } } } } } },
         },

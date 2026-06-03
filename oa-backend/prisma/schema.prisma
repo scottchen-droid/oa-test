@@ -13,14 +13,15 @@ datasource db {
 
 /// 地區（大區域，如台灣、香港、新加坡），是公司的上層分組
 model Region {
-  id           String   @id @default(uuid()) @db.Uuid   // 主鍵 UUID
-  code         String   @unique @db.VarChar(50)          // 地區代碼，全域唯一，如 TW / HK / SG
-  name         String   @db.VarChar(100)                 // 地區名稱，如 台灣
-  timezone     String?  @db.VarChar(100)                 // 時區，如 Asia/Taipei
-  currencyCode String?  @db.VarChar(10)                  // 預設貨幣代碼，如 TWD
-  isActive     Boolean  @default(true)                   // 是否啟用（軟刪除）
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(uuid()) @db.Uuid   // 主鍵 UUID
+  code          String   @unique @db.VarChar(50)          // 地區代碼，全域唯一，如 TW / HK / SG
+  name          String   @db.VarChar(100)                 // 地區名稱，如 台灣
+  timezone      String?  @db.VarChar(100)                 // 時區，如 Asia/Taipei
+  currencyCode  String?  @db.VarChar(10)                  // 預設貨幣代碼，如 TWD
+  defaultLocale String   @default("zh-TW") @db.VarChar(10) // 預設語系：zh-TW / zh-CN / en
+  isActive      Boolean  @default(true)                   // 是否啟用（軟刪除）
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   companies               Company[]
   approvalTemplates       ApprovalTemplate[]
@@ -59,9 +60,10 @@ model Company {
   approvalTemplates       ApprovalTemplate[]
   leavePolicies           LeavePolicies[]
   publicHolidays          PublicHoliday[]
-  employeeCostAllocations EmployeeCostAllocation[]
-  payrollCostAllocations  PayrollCostAllocationSnapshot[]
-  oaFormRequests          OaFormRequest[]       @relation("OaFormCompany")
+  employeeCostAllocations  EmployeeCostAllocation[]
+  payrollCostAllocations   PayrollCostAllocationSnapshot[]
+  oaFormRequests           OaFormRequest[]       @relation("OaFormCompany")
+  employeeApproverRoles    EmployeeApproverRole[]
 
   @@map("companies")
 }
@@ -201,7 +203,6 @@ model User {
   displayName            String    @db.VarChar(100)                  // 顯示名稱（前端展示用）
   avatarUrl              String?                                     // 頭像 URL（GCS Signed URL 或外部連結）
   status                 String    @default("pending_activation") @db.VarChar(30) // 帳號狀態：pending_activation / active / suspended / resigned / terminated
-  isSuperAdmin           Boolean   @default(false)                   // 超級管理員旗標，true 時繞過所有權限檢查；由 SUPER_ADMIN 角色指派自動設置
   lastLoginAt            DateTime?                                   // 最後一次成功登入時間
   lastLoginIp            String?   @db.VarChar(45)                   // 最後登入 IP（IPv4/IPv6）
   passwordChangedAt      DateTime?                                   // 密碼最後修改時間（用於強制重新登入判斷）
@@ -222,7 +223,8 @@ model User {
   headedBusinessUnits    BusinessUnit[]         @relation("BusinessUnitHead")
   ownedProjects          Project[]              @relation("ProjectOwner")
   managedDepartments     Department[]           @relation("DepartmentManager")
-  organizationLeaderRoles OrganizationLeader[]
+  organizationLeaderRoles  OrganizationLeader[]
+  employeeApproverRoles    EmployeeApproverRole[]
   // 成本分攤
   employeeCostAllocations EmployeeCostAllocation[]
   payrollCostAllocations  PayrollCostAllocationSnapshot[]
@@ -600,14 +602,15 @@ model ApprovalTemplate {
 
 /// 審批模板步驟定義
 model ApprovalTemplateStep {
-  id                 String   @id @default(uuid()) @db.Uuid
-  approvalTemplateId String   @db.Uuid
-  stepOrder          Int                               // 步驟順序，從 1 開始
-  stepName           String   @db.VarChar(150)        // 步驟名稱，如 部門主管審核
-  approvalMode       String   @default("all") @db.VarChar(30) // 審批模式：all=全部同意 / any=任一同意 / majority=多數同意
-  isRequired         Boolean  @default(true)           // 是否為必要步驟
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                   String   @id @default(uuid()) @db.Uuid
+  approvalTemplateId   String   @db.Uuid
+  stepOrder            Int                                    // 步驟順序，從 1 開始
+  stepName             String   @db.VarChar(150)             // 步驟名稱
+  approvalMode         String   @default("all") @db.VarChar(30) // all=全部並簽 / any=任一串簽 / majority=多數
+  isRequired           Boolean  @default(true)               // 是否為必要步驟
+  allowDynamicAdding   Boolean  @default(false)              // 是否允許加簽
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   template  ApprovalTemplate              @relation(fields: [approvalTemplateId], references: [id])
   approvers ApprovalTemplateStepApprover[]
@@ -616,23 +619,38 @@ model ApprovalTemplateStep {
   @@map("approval_template_steps")
 }
 
-/// 審批模板步驟的審核人設定
+/// 審批模板步驟的審核人設定（一個步驟可有多筆，支援並簽）
 model ApprovalTemplateStepApprover {
   id                     String   @id @default(uuid()) @db.Uuid
   approvalTemplateStepId String   @db.Uuid
-  approverType           String   @db.VarChar(100)  // 審核人類型：
-                                                    // user=指定人員 / role=指定角色
-                                                    // applicant_direct_manager=申請人直屬主管
-                                                    // department_manager=部門主管（依 OrganizationLeader 解析）
-                                                    // project_owner=項目負責人（依 OrganizationLeader 解析）
-                                                    // business_unit_head=事業部負責人（依 OrganizationLeader 解析）
-                                                    // company_hr=公司 HR 角色人員
-                                                    // company_finance=公司財務角色人員
-                                                    // company_head=公司負責人角色人員
-                                                    // dynamic=依規則動態解析
-                                                    // form_field_user=從表單欄位取得
-  approverUserId         String?  @db.Uuid           // 指定審核人（approverType=user 時使用）
-  approverRoleCode       String?  @db.VarChar(100)   // 審核角色代碼（approverType=role/company_* 時使用）
+  approverType           String   @db.VarChar(100)
+  // approverType 可用值：
+  //   applicant_direct_manager   申請人直屬主管（自動解析，無需 scope）
+  //   department_manager         部門主管（需 scopeConfig.departmentResolution）
+  //   project_owner              項目負責人（需 scopeConfig.projectResolution）
+  //   business_unit_head         事業部負責人（需 scopeConfig.buResolution）
+  //   company_hr                 公司人事專員（需 scopeConfig.companyResolution，從 employee_approver_roles 解析）
+  //   company_hr_manager         公司人事主管（同上）
+  //   company_finance            公司財務人員（同上）
+  //   company_finance_manager    公司財務主管（同上）
+  //   group_hr                   集團人事人員（無需 scope，從 employee_approver_roles 解析）
+  //   group_finance              集團財務人員（同上）
+  //   role                       指定系統角色（approverRoleCode）
+  //   user                       指定人員（approverUserId）
+  approverUserId         String?  @db.Uuid           // approverType=user 時使用
+  approverRoleCode       String?  @db.VarChar(100)   // approverType=role 時使用
+  scopeConfig            Json?                       // 範圍設定（見下方說明）
+  // scopeConfig 格式（依 approverType 使用不同欄位）：
+  // {
+  //   projectResolution: 'applicant_project' | 'specific_project',
+  //   projectId: 'uuid',         // specific_project 時使用
+  //   departmentResolution: 'applicant_department' | 'specific_department',
+  //   departmentId: 'uuid',
+  //   buResolution: 'applicant_bu' | 'specific_bu',
+  //   businessUnitId: 'uuid',
+  //   companyResolution: 'applicant_company' | 'specific_company',
+  //   companyId: 'uuid',
+  // }
   createdAt              DateTime @default(now())
 
   step     ApprovalTemplateStep @relation(fields: [approvalTemplateStepId], references: [id])
@@ -1208,6 +1226,32 @@ model AnnouncementTag {
   announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
 
   @@map("announcement_tags")
+}
+
+// ═══════════════════════════════════════════════
+// 員工審批職能角色
+// ═══════════════════════════════════════════════
+
+/// 員工審批職能角色（如：人事專員、財務主管）
+/// 用於審批流解析：company_hr → 查找 roleType='hr_specialist', scopeType='company', scopeId=companyId
+model EmployeeApproverRole {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid              // 員工 → User
+  roleType  String    @db.VarChar(50)       // hr_specialist / hr_manager / finance_specialist / finance_manager / company_head
+  scopeType String    @db.VarChar(20)       // company（公司層級）/ group（集團層級）
+  scopeId   String?   @db.Uuid              // companyId（scopeType=company 時），group 時為 null
+  isActive  Boolean   @default(true)
+  startedAt DateTime? @db.Date
+  endedAt   DateTime? @db.Date
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id])
+  company Company? @relation(fields: [scopeId], references: [id])
+
+  @@index([roleType, scopeType, scopeId])
+  @@index([userId])
+  @@map("employee_approver_roles")
 }
 
 // ═══════════════════════════════════════════════

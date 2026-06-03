@@ -115,12 +115,12 @@ export class EmployeesService {
         nameEn: true,
         avatarUrl: true,
         status: true,
-        isSuperAdmin: true,
         createdAt: true,
         updatedAt: true,
         employeeProfile: true,
         orgAssignments: {
           include: {
+            region: true,
             company: true,
             department: true,
             businessUnit: true,
@@ -144,22 +144,40 @@ export class EmployeesService {
     email: string;
     displayName: string;
     nameZh?: string;
+    nameEn?: string;
     employeeNo?: string;
     hireDate?: string;
     employmentType?: string;
     mobilePhone?: string;
+    gender?: string;
+    // org assignment
+    regionId?: string;
+    companyId?: string;
+    businessUnitId?: string;
+    projectId?: string;
+    departmentId?: string;
+    positionId?: string;
+    jobLevelId?: string;
+    directManagerUserId?: string;
   }) {
-    const { email, displayName, nameZh, employeeNo, hireDate, employmentType, mobilePhone } = dto;
+    const {
+      email, displayName, nameZh, nameEn, employeeNo, hireDate, employmentType,
+      mobilePhone, gender,
+      regionId, companyId, businessUnitId, projectId, departmentId, positionId, jobLevelId, directManagerUserId,
+    } = dto;
 
     const tempPassword = crypto.randomBytes(16).toString('hex');
     const passwordHash = await bcrypt.hash(tempPassword, 12);
     const resetToken = crypto.randomBytes(32).toString('hex');
 
-    return this.prisma.user.create({
+    const hasOrgData = companyId || regionId || businessUnitId || projectId || departmentId || positionId || jobLevelId;
+
+    const user = await this.prisma.user.create({
       data: {
         email,
         displayName,
         nameZh,
+        nameEn,
         employeeNo,
         passwordHash,
         passwordResetToken: resetToken,
@@ -170,22 +188,76 @@ export class EmployeesService {
             hireDate: hireDate ? new Date(hireDate) : undefined,
             employmentType: employmentType || 'full_time',
             mobilePhone,
+            gender,
           },
         },
       },
-      select: {
-        id: true,
-        email: true,
-        displayName: true,
-        employeeNo: true,
-        status: true,
-        createdAt: true,
-      },
+      select: { id: true, email: true, displayName: true, employeeNo: true, status: true, createdAt: true },
     });
+
+    if (hasOrgData) {
+      await this.prisma.userOrgAssignment.create({
+        data: {
+          userId: user.id,
+          regionId: regionId || null,
+          companyId: companyId || null,
+          businessUnitId: businessUnitId || null,
+          projectId: projectId || null,
+          departmentId: departmentId || null,
+          positionId: positionId || null,
+          jobLevelId: jobLevelId || null,
+          directManagerUserId: directManagerUserId || null,
+          isPrimary: true,
+          assignmentType: 'primary',
+          isActive: true,
+          startedAt: hireDate ? new Date(hireDate) : new Date(),
+        },
+      });
+    }
+
+    return user;
+  }
+
+  async updateOrgAssignment(userId: string, dto: {
+    regionId?: string;
+    companyId?: string;
+    businessUnitId?: string;
+    projectId?: string;
+    departmentId?: string;
+    positionId?: string;
+    jobLevelId?: string;
+    directManagerUserId?: string;
+    assignmentType?: string;
+  }) {
+    const existing = await this.prisma.userOrgAssignment.findFirst({
+      where: { userId, isPrimary: true },
+    });
+
+    const data = {
+      regionId: dto.regionId || null,
+      companyId: dto.companyId || null,
+      businessUnitId: dto.businessUnitId || null,
+      projectId: dto.projectId || null,
+      departmentId: dto.departmentId || null,
+      positionId: dto.positionId || null,
+      jobLevelId: dto.jobLevelId || null,
+      directManagerUserId: dto.directManagerUserId || null,
+      assignmentType: dto.assignmentType || 'primary',
+    };
+
+    if (existing) {
+      await this.prisma.userOrgAssignment.update({ where: { id: existing.id }, data });
+    } else {
+      await this.prisma.userOrgAssignment.create({
+        data: { userId, isPrimary: true, isActive: true, ...data },
+      });
+    }
+
+    return this.findOne(userId);
   }
 
   async update(userId: string, dto: any) {
-    const { email, displayName, nameZh, nameEn, avatarUrl, ...profileData } = dto;
+    const { email, displayName, nameZh, nameEn, avatarUrl, employeeNo, status, ...profileData } = dto;
 
     const userUpdate: any = {};
     if (email) userUpdate.email = email;
@@ -193,6 +265,8 @@ export class EmployeesService {
     if (nameZh !== undefined) userUpdate.nameZh = nameZh;
     if (nameEn !== undefined) userUpdate.nameEn = nameEn;
     if (avatarUrl !== undefined) userUpdate.avatarUrl = avatarUrl;
+    if (employeeNo !== undefined) userUpdate.employeeNo = employeeNo;
+    if (status !== undefined) userUpdate.status = status;
 
     if (Object.keys(userUpdate).length > 0) {
       await this.prisma.user.update({ where: { id: userId }, data: userUpdate });

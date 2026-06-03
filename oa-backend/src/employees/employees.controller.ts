@@ -45,6 +45,12 @@ export class EmployeesController {
     return this.service.updateSensitiveData(userId, dto);
   }
 
+  @Patch(':userId/org-assignment')
+  @ApiOperation({ summary: 'Update employee primary org assignment' })
+  updateOrgAssignment(@Param('userId') userId: string, @Body() dto: any) {
+    return this.service.updateOrgAssignment(userId, dto);
+  }
+
   @Post(':userId/offboard')
   @ApiOperation({ summary: 'Offboard employee (HR Admin)' })
   offboard(@Param('userId') userId: string, @Body() dto: any) {

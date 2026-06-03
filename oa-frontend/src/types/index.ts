@@ -6,7 +6,6 @@ export interface User {
   nameEn?: string
   employeeNo?: string
   status: 'pending_activation' | 'active' | 'suspended' | 'resigned' | 'terminated'
-  isSuperAdmin: boolean
   avatarUrl?: string
   lastLoginAt?: string
   createdAt: string
