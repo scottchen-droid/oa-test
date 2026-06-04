@@ -60,12 +60,11 @@
             {{ row.employeeProfile?.hireDate ?? '—' }}
           </template>
         </el-table-column>
-        <el-table-column :label="$t('common.actions')" width="170" fixed="right">
+        <el-table-column :label="$t('common.actions')" width="100" fixed="right">
           <template #default="{ row }">
             <RouterLink :to="`/hr/employees/${row.id}`">
               <el-button text size="small">{{ $t('common.detail') }}</el-button>
             </RouterLink>
-            <el-button text size="small" type="primary" @click="openApproverRoles(row)">審批角色</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -145,101 +144,6 @@
       </template>
     </el-dialog>
 
-    <!-- ── 審批職能角色 Drawer ─────────────────────────── -->
-    <el-drawer
-      v-model="approverRolesDrawer"
-      :title="`審批職能角色 — ${approverRolesEmployee?.displayName ?? ''}`"
-      size="480px"
-      direction="rtl"
-    >
-      <div v-if="approverRolesDrawer">
-        <el-alert type="info" :closable="false" style="margin-bottom:14px">
-          <template #title>
-            每個職能角色在同一公司/集團層級只能有一人擔任。
-            指派新人員時，若已有人持有，系統會提示轉移。
-          </template>
-        </el-alert>
-
-        <!-- 新增表單 -->
-        <el-card class="add-role-card" shadow="never">
-          <template #header><span style="font-size:13px;font-weight:600">新增角色</span></template>
-          <el-form :model="quickRoleForm" label-width="90px" size="small">
-            <el-form-item label="職能角色">
-              <el-select v-model="quickRoleForm.roleType" style="width:100%" @change="onQuickRoleChange">
-                <el-option-group label="人事類">
-                  <el-option value="hr_specialist" label="人事專員" />
-                  <el-option value="hr_manager"    label="人事主管" />
-                </el-option-group>
-                <el-option-group label="財務類">
-                  <el-option value="finance_specialist" label="財務人員" />
-                  <el-option value="finance_manager"    label="財務主管" />
-                </el-option-group>
-                <el-option-group label="管理類">
-                  <el-option value="company_head" label="公司負責人" />
-                </el-option-group>
-              </el-select>
-            </el-form-item>
-            <el-form-item label="層級">
-              <el-radio-group v-model="quickRoleForm.scopeType" size="small" @change="quickRoleForm.scopeId = ''; quickRoleHolder = null">
-                <el-radio-button value="company">公司層級</el-radio-button>
-                <el-radio-button value="group">集團層級</el-radio-button>
-              </el-radio-group>
-            </el-form-item>
-            <el-form-item v-if="quickRoleForm.scopeType === 'company'" label="所屬公司">
-              <el-select v-model="quickRoleForm.scopeId" style="width:100%" @change="checkQuickRoleHolder">
-                <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
-              </el-select>
-            </el-form-item>
-
-            <el-alert
-              v-if="quickRoleHolder"
-              type="warning"
-              :closable="false"
-              style="margin-bottom:8px"
-            >
-              <template #title>
-                目前由 <strong>{{ quickRoleHolder.displayName }}（{{ quickRoleHolder.employeeNo }}）</strong> 擔任，儲存後將轉移。
-              </template>
-            </el-alert>
-
-            <el-button
-              :type="quickRoleHolder ? 'warning' : 'primary'"
-              size="small"
-              :loading="quickRoleSaving"
-              @click="saveQuickRole"
-            >
-              {{ quickRoleHolder ? '確認轉移' : '指派' }}
-            </el-button>
-          </el-form>
-        </el-card>
-
-        <!-- 目前持有的角色 -->
-        <div class="current-roles-title">目前角色</div>
-        <el-table v-loading="approverRolesLoading" :data="approverRolesList" border size="small">
-          <el-table-column label="職能角色" width="120">
-            <template #default="{ row }">
-              <el-tag :type="quickRoleTagType(row.roleType)" size="small">{{ ROLE_LABELS[row.roleType] ?? row.roleType }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="層級" width="90">
-            <template #default="{ row }">
-              <el-tag :type="row.scopeType === 'group' ? 'warning' : ''" size="small">
-                {{ row.scopeType === 'group' ? '集團' : '公司' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="公司">
-            <template #default="{ row }">{{ row.company?.name ?? '（集團）' }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="70" align="center">
-            <template #default="{ row }">
-              <el-button text size="small" type="danger" @click="removeQuickRole(row.id)">移除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-    </el-drawer>
-
   </div>
 </template>
 
@@ -249,7 +153,6 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { employeesApi } from '@/api/employees.api'
-import { approvalsApi } from '@/api/approvals.api'
 import { companiesApi, departmentsApi, positionsApi, jobLevelsApi } from '@/api/organizations.api'
 import { useUiStore } from '@/stores/ui.store'
 import { useTable } from '@/composables/useTable'
@@ -350,92 +253,6 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' | 'info
   return map[status] ?? 'info'
 }
 
-// ── 審批職能角色 Quick Drawer ─────────────────────────────
-
-const ROLE_LABELS: Record<string, string> = {
-  hr_specialist: '人事專員', hr_manager: '人事主管',
-  finance_specialist: '財務人員', finance_manager: '財務主管',
-  company_head: '公司負責人',
-}
-
-const approverRolesDrawer    = ref(false)
-const approverRolesEmployee  = ref<User | null>(null)
-const approverRolesLoading   = ref(false)
-const approverRolesList      = ref<any[]>([])
-const quickRoleSaving        = ref(false)
-const quickRoleHolder        = ref<any>(null)
-
-const quickRoleForm = reactive({ roleType: 'hr_specialist', scopeType: 'company', scopeId: '' })
-
-function quickRoleTagType(type?: string): '' | 'success' | 'warning' | 'info' | 'danger' {
-  const m: Record<string, '' | 'success' | 'warning' | 'info' | 'danger'> = {
-    hr_specialist: '', hr_manager: 'success',
-    finance_specialist: 'warning', finance_manager: 'danger', company_head: 'info',
-  }
-  return m[type ?? ''] ?? 'info'
-}
-
-async function openApproverRoles(row: User) {
-  approverRolesEmployee.value = row
-  quickRoleHolder.value = null
-  Object.assign(quickRoleForm, { roleType: 'hr_specialist', scopeType: 'company', scopeId: '' })
-  approverRolesDrawer.value = true
-  await loadApproverRolesList()
-}
-
-async function loadApproverRolesList() {
-  if (!approverRolesEmployee.value) return
-  approverRolesLoading.value = true
-  try {
-    approverRolesList.value = await approvalsApi.getEmployeeApproverRoles(approverRolesEmployee.value.id)
-  } finally {
-    approverRolesLoading.value = false
-  }
-}
-
-function onQuickRoleChange() { quickRoleHolder.value = null; checkQuickRoleHolder() }
-
-async function checkQuickRoleHolder() {
-  const { roleType, scopeType, scopeId } = quickRoleForm
-  if (!roleType || !scopeType) return
-  if (scopeType === 'company' && !scopeId) return
-  try {
-    const holder = await approvalsApi.findApproverRoleHolder({
-      roleType, scopeType, scopeId: scopeId || undefined,
-    })
-    if (holder && holder.userId !== approverRolesEmployee.value?.id) {
-      quickRoleHolder.value = holder.user ?? holder
-    } else {
-      quickRoleHolder.value = null
-    }
-  } catch { quickRoleHolder.value = null }
-}
-
-async function saveQuickRole() {
-  if (!approverRolesEmployee.value) return
-  quickRoleSaving.value = true
-  try {
-    await approvalsApi.createEmployeeApproverRole(approverRolesEmployee.value.id, {
-      roleType:     quickRoleForm.roleType,
-      scopeType:    quickRoleForm.scopeType,
-      scopeId:      quickRoleForm.scopeType === 'company' ? (quickRoleForm.scopeId || undefined) : undefined,
-      forceReplace: !!quickRoleHolder.value,
-    })
-    ElMessage.success(quickRoleHolder.value ? '角色轉移成功' : '角色指派成功')
-    quickRoleHolder.value = null
-    await loadApproverRolesList()
-  } catch (err: any) {
-    ElMessage.error(err?.response?.data?.message ?? '操作失敗')
-  } finally {
-    quickRoleSaving.value = false
-  }
-}
-
-async function removeQuickRole(roleId: string) {
-  await approvalsApi.deleteEmployeeApproverRole(roleId)
-  ElMessage.success('已移除')
-  await loadApproverRolesList()
-}
 </script>
 
 <style scoped>
@@ -445,6 +262,4 @@ async function removeQuickRole(roleId: string) {
 .name-link { color: #409eff; text-decoration: none; font-weight: 500; }
 .name-zh { font-size: 12px; color: #999; }
 .pagination { margin-top: 16px; justify-content: flex-end; }
-.add-role-card { margin-bottom: 16px; }
-.current-roles-title { font-size: 13px; font-weight: 600; color: #303133; margin: 0 0 10px; }
 </style>

@@ -122,48 +122,7 @@
           </el-card>
         </el-tab-pane>
 
-        <!-- ── 審批職能角色 ─────────────────────────────── -->
-        <el-tab-pane label="審批職能角色" name="approver-roles">
-          <el-card>
-            <template #header>
-              <div class="card-header">
-                <span>審批職能角色</span>
-                <el-button type="primary" size="small" :icon="Plus" @click="openAddApproverRole">新增角色</el-button>
-              </div>
-            </template>
-            <el-alert type="info" :closable="false" style="margin-bottom:12px">
-              <template #title>
-                審批職能角色決定此員工在審批流中擔任哪些職能角色，例如「公司人事專員」、「集團財務人員」。
-                審批流引擎解析審批人時，會從此列表中查找。
-              </template>
-            </el-alert>
-            <el-table v-loading="approverRolesLoading" :data="approverRoles" border stripe>
-              <el-table-column label="職能角色" width="180">
-                <template #default="{ row }">
-                  <el-tag :type="roleTypeTagType(row.roleType)" size="small">{{ roleTypeLabel(row.roleType) }}</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="層級" width="100">
-                <template #default="{ row }">
-                  <el-tag :type="row.scopeType === 'group' ? 'warning' : ''" size="small">
-                    {{ row.scopeType === 'group' ? '集團層級' : '公司層級' }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="所屬公司">
-                <template #default="{ row }">{{ row.company?.name ?? '（集團通用）' }}</template>
-              </el-table-column>
-              <el-table-column label="生效日期" width="120">
-                <template #default="{ row }">{{ row.startedAt?.slice(0,10) ?? '—' }}</template>
-              </el-table-column>
-              <el-table-column label="操作" width="80" fixed="right">
-                <template #default="{ row }">
-                  <el-button text size="small" type="danger" @click="removeApproverRole(row.id)">移除</el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-          </el-card>
-        </el-tab-pane>
+        <!-- 審批職能角色已移至「審批流設定 → 審批群組」統一管理 -->
 
       </el-tabs>
     </template>
@@ -323,77 +282,17 @@
       </template>
     </el-dialog>
 
-    <!-- ── 新增審批職能角色 Dialog ──────────────────────── -->
-    <el-dialog v-model="addApproverRoleDialog" title="新增審批職能角色" width="500px">
-      <el-form :model="approverRoleForm" label-width="100px">
-        <el-form-item label="職能角色">
-          <el-select v-model="approverRoleForm.roleType" style="width:100%" @change="onRoleTypeChange">
-            <el-option-group label="人事類">
-              <el-option value="hr_specialist" label="人事專員" />
-              <el-option value="hr_manager"    label="人事主管" />
-            </el-option-group>
-            <el-option-group label="財務類">
-              <el-option value="finance_specialist" label="財務人員" />
-              <el-option value="finance_manager"    label="財務主管" />
-            </el-option-group>
-            <el-option-group label="管理類">
-              <el-option value="company_head" label="公司負責人" />
-            </el-option-group>
-          </el-select>
-        </el-form-item>
-        <el-form-item label="層級">
-          <el-radio-group v-model="approverRoleForm.scopeType" @change="onScopeTypeChange">
-            <el-radio value="company">公司層級</el-radio>
-            <el-radio value="group">集團層級</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item v-if="approverRoleForm.scopeType === 'company'" label="所屬公司">
-          <el-select v-model="approverRoleForm.scopeId" style="width:100%" @change="checkRoleHolder">
-            <el-option v-for="c in companiesForRole" :key="c.id" :label="c.name" :value="c.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="生效日期">
-          <el-date-picker v-model="approverRoleForm.startedAt" type="date" value-format="YYYY-MM-DD" style="width:100%" />
-        </el-form-item>
-
-        <!-- 現任持有人提示 -->
-        <el-alert
-          v-if="currentRoleHolder"
-          type="warning"
-          :closable="false"
-          style="margin-top: 8px"
-        >
-          <template #title>
-            <span>此角色目前由</span>
-            <strong style="margin: 0 4px">{{ currentRoleHolder.displayName }}（{{ currentRoleHolder.employeeNo }}）</strong>
-            <span>擔任。儲存後將自動轉移，原持有人角色將失效。</span>
-          </template>
-        </el-alert>
-      </el-form>
-      <template #footer>
-        <el-button @click="addApproverRoleDialog = false">取消</el-button>
-        <el-button
-          :type="currentRoleHolder ? 'warning' : 'primary'"
-          :loading="approverRoleSaving"
-          @click="saveApproverRole"
-        >
-          {{ currentRoleHolder ? '確認轉移' : '確定' }}
-        </el-button>
-      </template>
-    </el-dialog>
-
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Check, Plus } from '@element-plus/icons-vue'
+import { ArrowLeft, Check } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { employeesApi } from '@/api/employees.api'
-import { approvalsApi } from '@/api/approvals.api'
 import {
   regionsApi, companiesApi, businessUnitsApi, projectsApi,
   departmentsApi, positionsApi, jobLevelsApi,
@@ -647,112 +546,6 @@ function formatDate(date?: string) {
   return date ? dayjs(date).format('YYYY-MM-DD HH:mm') : '—'
 }
 
-// ── 審批職能角色 ───────────────────────────────────────────
-const approverRoles        = ref<any[]>([])
-const approverRolesLoading = ref(false)
-const addApproverRoleDialog = ref(false)
-const approverRoleSaving   = ref(false)
-const companiesForRole     = ref<any[]>([])
-
-const approverRoleForm = reactive({
-  roleType:  'hr_specialist',
-  scopeType: 'company',
-  scopeId:   '',
-  startedAt: '',
-})
-const currentRoleHolder = ref<{ userId: string; displayName: string; employeeNo: string } | null>(null)
-
-const ROLE_TYPE_LABELS: Record<string, string> = {
-  hr_specialist:      '人事專員',
-  hr_manager:         '人事主管',
-  finance_specialist: '財務人員',
-  finance_manager:    '財務主管',
-  company_head:       '公司負責人',
-}
-function roleTypeLabel(type?: string) { return ROLE_TYPE_LABELS[type ?? ''] ?? type ?? '—' }
-function roleTypeTagType(type?: string): '' | 'success' | 'warning' | 'info' | 'danger' {
-  const m: Record<string, '' | 'success' | 'warning' | 'info' | 'danger'> = {
-    hr_specialist: '', hr_manager: 'success',
-    finance_specialist: 'warning', finance_manager: 'danger',
-    company_head: 'info',
-  }
-  return m[type ?? ''] ?? 'info'
-}
-
-async function loadApproverRoles() {
-  if (!employee.value) return
-  approverRolesLoading.value = true
-  try {
-    approverRoles.value = await approvalsApi.getEmployeeApproverRoles(employee.value.id)
-  } finally {
-    approverRolesLoading.value = false
-  }
-}
-
-async function openAddApproverRole() {
-  if (!companiesForRole.value.length) {
-    companiesForRole.value = await companiesApi.getAll()
-  }
-  Object.assign(approverRoleForm, { roleType: 'hr_specialist', scopeType: 'company', scopeId: '', startedAt: '' })
-  currentRoleHolder.value = null
-  addApproverRoleDialog.value = true
-}
-
-function onRoleTypeChange() { currentRoleHolder.value = null; checkRoleHolder() }
-function onScopeTypeChange() { approverRoleForm.scopeId = ''; currentRoleHolder.value = null }
-
-async function checkRoleHolder() {
-  const { roleType, scopeType, scopeId } = approverRoleForm
-  if (!roleType || !scopeType) return
-  if (scopeType === 'company' && !scopeId) return
-  try {
-    const holder = await approvalsApi.findApproverRoleHolder({
-      roleType, scopeType, scopeId: scopeId || undefined,
-    })
-    // Only warn if it's a different person
-    if (holder && holder.userId !== employee.value?.id) {
-      currentRoleHolder.value = holder.user ?? { userId: holder.userId, displayName: '未知', employeeNo: '—' }
-    } else {
-      currentRoleHolder.value = null
-    }
-  } catch {
-    currentRoleHolder.value = null
-  }
-}
-
-async function saveApproverRole() {
-  if (!employee.value) return
-  approverRoleSaving.value = true
-  try {
-    await approvalsApi.createEmployeeApproverRole(employee.value.id, {
-      roleType:     approverRoleForm.roleType,
-      scopeType:    approverRoleForm.scopeType,
-      scopeId:      approverRoleForm.scopeType === 'company' ? (approverRoleForm.scopeId || undefined) : undefined,
-      startedAt:    approverRoleForm.startedAt || undefined,
-      forceReplace: !!currentRoleHolder.value,  // 有衝突時自動轉移
-    })
-    ElMessage.success(currentRoleHolder.value ? '角色轉移成功' : t('msg.saveSuccess'))
-    addApproverRoleDialog.value = false
-    currentRoleHolder.value = null
-    await loadApproverRoles()
-  } catch (err: any) {
-    // 理論上 forceReplace 會直接處理，但保留兜底
-    ElMessage.error(err?.response?.data?.message ?? t('msg.saveFailed'))
-  } finally {
-    approverRoleSaving.value = false
-  }
-}
-
-async function removeApproverRole(roleId: string) {
-  await approvalsApi.deleteEmployeeApproverRole(roleId)
-  ElMessage.success(t('msg.operationSuccess'))
-  await loadApproverRoles()
-}
-
-// Load approver roles when switching to the tab
-watch(activeTab, (tab) => {
-  if (tab === 'approver-roles' && !approverRoles.value.length) loadApproverRoles()
-})
 </script>
 
 <style scoped>

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -207,18 +207,20 @@ export class ApprovalsService {
     return { message: 'Rejected' };
   }
 
-  async findAllTemplates(params: { page?: number; limit?: number }) {
-    const { page = 1, limit = 20 } = params;
+  async findAllTemplates(params: { formType?: string; page?: number; limit?: number }) {
+    const { formType, page = 1, limit = 20 } = params;
     const skip = (page - 1) * limit;
+    const where: any = formType ? { formType } : {};
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.approvalTemplate.findMany({
+        where,
         skip,
         take: limit,
-        include: { steps: { include: { approvers: true } } },
+        include: { steps: { include: { approvers: true }, orderBy: { stepOrder: 'asc' } } },
         orderBy: { priority: 'asc' },
       }),
-      this.prisma.approvalTemplate.count(),
+      this.prisma.approvalTemplate.count({ where }),
     ]);
 
     return { items, total, page, limit };
@@ -239,7 +241,10 @@ export class ApprovalsService {
   }
 
   async createTemplate(dto: any) {
-    return this.prisma.approvalTemplate.create({ data: dto });
+    // Auto-generate a unique code if not provided
+    const code = dto.code?.trim()
+      || `TPL-${(dto.formType ?? 'GENERAL').toUpperCase().replace(/_/g, '-')}-${Date.now()}`;
+    return this.prisma.approvalTemplate.create({ data: { ...dto, code } });
   }
 
   async updateTemplate(id: string, dto: any) {
@@ -311,129 +316,300 @@ export class ApprovalsService {
     });
   }
 
-  // ── 員工審批職能角色 ──────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════
+  // 審批群組 CRUD
+  // ══════════════════════════════════════════════════════════════
 
-  async getEmployeeApproverRoles(userId: string) {
-    return this.prisma.employeeApproverRole.findMany({
-      where: { userId, isActive: true },
-      include: {
-        user: { select: { id: true, displayName: true, employeeNo: true } },
-        company: { select: { id: true, name: true, code: true } },
-      },
-      orderBy: [{ scopeType: 'asc' }, { roleType: 'asc' }],
-    });
+  private groupInclude = {
+    members: {
+      where: { isActive: true },
+      include: { user: { select: { id: true, displayName: true, employeeNo: true, avatarUrl: true } } },
+      orderBy: { memberType: 'asc' as const },
+    },
+    scopes: { orderBy: { scopeType: 'asc' as const } },
+  };
+
+  async findAllGroups(params: { roleCode?: string; isActive?: boolean; page?: number; limit?: number }) {
+    const { roleCode, isActive, page = 1, limit = 50 } = params;
+    const where: any = {};
+    if (roleCode)               where.roleCode = roleCode;
+    if (isActive !== undefined)  where.isActive = isActive;
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.approvalGroup.findMany({
+        where, skip: (page - 1) * limit, take: limit,
+        include: this.groupInclude,
+        orderBy: [{ roleCode: 'asc' }, { name: 'asc' }],
+      }),
+      this.prisma.approvalGroup.count({ where }),
+    ]);
+    return { items, total, page, limit };
   }
 
-  /**
-   * 查詢特定職能角色目前由誰擔任（用於前端顯示衝突資訊）
-   * roleType + scopeType + scopeId 組合全系統只能有一個啟用記錄
-   */
-  async findApproverRoleHolder(dto: { roleType: string; scopeType: string; scopeId?: string }) {
-    return this.prisma.employeeApproverRole.findFirst({
-      where: {
-        roleType:  dto.roleType,
-        scopeType: dto.scopeType,
-        scopeId:   dto.scopeId ?? null,
-        isActive:  true,
-      },
-      include: {
-        user:    { select: { id: true, displayName: true, employeeNo: true } },
-        company: { select: { id: true, name: true } },
-      },
+  async getGroup(id: string) {
+    const g = await this.prisma.approvalGroup.findUnique({
+      where: { id },
+      include: this.groupInclude,
     });
+    if (!g) throw new NotFoundException('Approval group not found');
+    return g;
   }
 
-  /**
-   * 為員工指派審批職能角色
-   * - 每個 (roleType + scopeType + scopeId) 全系統只能有一個啟用記錄
-   * - forceReplace=false：若有人持有則拋出 409，附帶現持有人資訊
-   * - forceReplace=true ：先停用現持有人，再指派給新員工（轉移）
-   */
-  async createEmployeeApproverRole(
-    userId: string,
-    dto: { roleType: string; scopeType: string; scopeId?: string; startedAt?: string; endedAt?: string },
-    forceReplace = false,
-  ) {
-    const scopeId = dto.scopeId ?? null;
-
-    // 檢查是否已有其他人持有此角色
-    const existing = await this.prisma.employeeApproverRole.findFirst({
-      where: {
-        roleType:  dto.roleType,
-        scopeType: dto.scopeType,
-        scopeId,
-        isActive:  true,
-        userId:    { not: userId },   // 排除自己（同人重複設定不算衝突）
-      },
-      include: {
-        user: { select: { id: true, displayName: true, employeeNo: true } },
-      },
-    });
-
-    if (existing && !forceReplace) {
-      throw new ConflictException({
-        message: `此角色已由 ${existing.user.displayName}（工號 ${existing.user.employeeNo}）擔任`,
-        currentHolder: {
-          roleRecordId: existing.id,
-          userId:       existing.userId,
-          displayName:  existing.user.displayName,
-          employeeNo:   existing.user.employeeNo,
-        },
-      });
-    }
-
-    if (existing && forceReplace) {
-      // 停用原持有人
-      await this.prisma.employeeApproverRole.update({
-        where: { id: existing.id },
-        data:  { isActive: false, endedAt: new Date() },
-      });
-    }
-
-    // 檢查同一員工是否已持有此角色（避免重複指派）
-    const selfExisting = await this.prisma.employeeApproverRole.findFirst({
-      where: { roleType: dto.roleType, scopeType: dto.scopeType, scopeId, userId, isActive: true },
-    });
-    if (selfExisting) {
-      return selfExisting; // 已存在，直接返回，不報錯
-    }
-
-    return this.prisma.employeeApproverRole.create({
+  async createGroup(dto: { name: string; roleCode: string; mode?: string; description?: string }) {
+    return this.prisma.approvalGroup.create({
       data: {
-        userId,
-        roleType:  dto.roleType,
-        scopeType: dto.scopeType,
-        scopeId,
-        startedAt: dto.startedAt ? new Date(dto.startedAt) : null,
-        endedAt:   dto.endedAt   ? new Date(dto.endedAt)   : null,
+        name:        dto.name,
+        roleCode:    dto.roleCode,
+        mode:        dto.mode ?? 'primary',
+        description: dto.description,
       },
-      include: {
-        user:    { select: { id: true, displayName: true, employeeNo: true } },
-        company: { select: { id: true, name: true, code: true } },
-      },
+      include: this.groupInclude,
     });
   }
 
-  async deleteEmployeeApproverRole(roleId: string) {
-    return this.prisma.employeeApproverRole.update({
-      where: { id: roleId },
+  async updateGroup(id: string, dto: { name?: string; mode?: string; description?: string; isActive?: boolean }) {
+    await this.getGroup(id);
+    return this.prisma.approvalGroup.update({
+      where: { id },
+      data:  dto,
+      include: this.groupInclude,
+    });
+  }
+
+  // ── 群組成員 ──────────────────────────────────────────────────
+
+  async addGroupMember(groupId: string, dto: {
+    userId: string; memberType?: string; startedAt?: string; endedAt?: string;
+  }) {
+    await this.getGroup(groupId);
+    const existing = await this.prisma.approvalGroupMember.findFirst({
+      where: { groupId, userId: dto.userId, isActive: true },
+    });
+    if (existing) {
+      // 更新既有記錄的 memberType
+      return this.prisma.approvalGroupMember.update({
+        where: { id: existing.id },
+        data: {
+          memberType: dto.memberType ?? existing.memberType,
+          startedAt:  dto.startedAt ? new Date(dto.startedAt) : existing.startedAt,
+          endedAt:    dto.endedAt   ? new Date(dto.endedAt)   : existing.endedAt,
+        },
+        include: { user: { select: { id: true, displayName: true, employeeNo: true, avatarUrl: true } } },
+      });
+    }
+    return this.prisma.approvalGroupMember.create({
+      data: {
+        groupId,
+        userId:     dto.userId,
+        memberType: dto.memberType ?? 'member',
+        startedAt:  dto.startedAt ? new Date(dto.startedAt) : null,
+        endedAt:    dto.endedAt   ? new Date(dto.endedAt)   : null,
+      },
+      include: { user: { select: { id: true, displayName: true, employeeNo: true, avatarUrl: true } } },
+    });
+  }
+
+  async removeGroupMember(memberId: string) {
+    return this.prisma.approvalGroupMember.update({
+      where: { id: memberId },
       data:  { isActive: false, endedAt: new Date() },
     });
   }
 
-  /** 查詢某公司/集團所有審批職能角色的當前持有人 */
-  async listApproverRoleHolders(params: { scopeType?: string; scopeId?: string }) {
-    return this.prisma.employeeApproverRole.findMany({
+  // ── 群組服務範圍 ───────────────────────────────────────────────
+
+  async addGroupScope(groupId: string, dto: {
+    scopeType: string; scopeId?: string; formType?: string;
+  }) {
+    await this.getGroup(groupId);
+    const existing = await this.prisma.approvalGroupScope.findFirst({
       where: {
-        isActive:  true,
-        ...(params.scopeType ? { scopeType: params.scopeType } : {}),
-        ...(params.scopeId   ? { scopeId:   params.scopeId   } : {}),
+        groupId,
+        scopeType: dto.scopeType,
+        scopeId:   dto.scopeId   ?? null,
+        formType:  dto.formType  ?? null,
+      },
+    });
+    if (existing) return existing; // 已存在，不重複新增
+    return this.prisma.approvalGroupScope.create({
+      data: {
+        groupId,
+        scopeType: dto.scopeType,
+        scopeId:   dto.scopeId  ?? null,
+        formType:  dto.formType ?? null,
+      },
+    });
+  }
+
+  async removeGroupScope(scopeId: string) {
+    return this.prisma.approvalGroupScope.delete({ where: { id: scopeId } });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // 審批群組解析引擎
+  // 依據 roleCode + 申請人組織上下文，找出最匹配的群組，再取得審批人
+  // ══════════════════════════════════════════════════════════════
+
+  /**
+   * 解析群組審批人
+   * 優先序：company scope > region scope > all scope
+   * 回傳所有匹配成員，由呼叫方依群組 mode 決定通知誰
+   */
+  async resolveGroupApprovers(roleCode: string, context: {
+    companyId?: string;
+    regionId?: string;
+    businessUnitId?: string;
+    projectId?: string;
+    departmentId?: string;
+    formType?: string;
+  }): Promise<{ userId: string; displayName: string; memberType: string; groupId: string; groupName: string; mode: string } | null> {
+
+    const allGroups = await this.prisma.approvalGroup.findMany({
+      where: { roleCode, isActive: true },
+      include: {
+        scopes: true,
+        members: {
+          where: { isActive: true },
+          include: { user: { select: { id: true, displayName: true } } },
+        },
+      },
+    });
+
+    if (!allGroups.length) return null;
+
+    // 計算每個群組與 context 的匹配分數（越精確越高）
+    const SCOPE_PRIORITY: Record<string, number> = {
+      department: 6, project: 5, business_unit: 4, company: 3, region: 2, form_type: 1, all: 0,
+    };
+
+    let bestGroup: typeof allGroups[0] | null = null;
+    let bestScore = -1;
+
+    for (const group of allGroups) {
+      let score = -1;
+      for (const scope of group.scopes) {
+        let matches = false;
+        switch (scope.scopeType) {
+          case 'all':           matches = true; break;
+          case 'company':       matches = !!context.companyId && scope.scopeId === context.companyId; break;
+          case 'region':        matches = !!context.regionId  && scope.scopeId === context.regionId; break;
+          case 'business_unit': matches = !!context.businessUnitId && scope.scopeId === context.businessUnitId; break;
+          case 'project':       matches = !!context.projectId && scope.scopeId === context.projectId; break;
+          case 'department':    matches = !!context.departmentId && scope.scopeId === context.departmentId; break;
+          case 'form_type':     matches = !!context.formType && scope.formType === context.formType; break;
+        }
+        if (matches) {
+          const priority = SCOPE_PRIORITY[scope.scopeType] ?? 0;
+          if (priority > score) score = priority;
+        }
+      }
+      if (score > bestScore) { bestScore = score; bestGroup = group; }
+    }
+
+    if (!bestGroup || bestScore < 0) return null;
+
+    const member = bestGroup.mode === 'primary'
+      ? bestGroup.members.find(m => m.memberType === 'primary') ?? bestGroup.members[0]
+      : bestGroup.members[0];
+
+    if (!member) return null;
+
+    return {
+      userId:      member.userId,
+      displayName: member.user.displayName,
+      memberType:  member.memberType,
+      groupId:     bestGroup.id,
+      groupName:   bestGroup.name,
+      mode:        bestGroup.mode,
+    };
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // 送出前審批流驗證
+  // ══════════════════════════════════════════════════════════════
+
+  /** 驗證某表單是否有可用的審批模板，以及是否能解析出所有必要的審批人 */
+  async validateFormApprovalReady(params: {
+    formType:      string;
+    amount?:       number;
+    companyId?:    string;
+    regionId?:     string;
+    businessUnitId?: string;
+    projectId?:    string;
+    departmentId?: string;
+    applicantId?:  string;
+  }) {
+    const { formType, amount } = params;
+
+    // 1. 是否有啟用的模板
+    const templates = await this.prisma.approvalTemplate.findMany({
+      where: {
+        formType,
+        isActive: true,
+        ...(amount !== undefined ? {
+          AND: [
+            { OR: [{ minAmount: null }, { minAmount: { lte: amount } }] },
+            { OR: [{ maxAmount: null }, { maxAmount: { gte: amount } }] },
+          ],
+        } : {}),
       },
       include: {
-        user:    { select: { id: true, displayName: true, employeeNo: true, avatarUrl: true } },
-        company: { select: { id: true, name: true, code: true } },
+        steps: {
+          include: { approvers: true },
+          orderBy: { stepOrder: 'asc' },
+        },
       },
-      orderBy: [{ roleType: 'asc' }, { scopeType: 'asc' }],
+      orderBy: { priority: 'asc' },
     });
+
+    if (!templates.length) {
+      throw new BadRequestException({
+        code: 'NO_TEMPLATE',
+        message: `表單類型「${formType}」沒有符合條件的啟用審批模板，請聯繫系統管理員。`,
+      });
+    }
+
+    // 選擇優先序最高的模板
+    const template = templates[0];
+    const errors: string[] = [];
+
+    // 2. 驗證每個必要步驟是否能解析審批人
+    const GROUP_BASED_TYPES = [
+      'company_hr', 'company_hr_manager', 'company_finance', 'company_finance_manager',
+      'group_hr', 'group_finance', 'group_finance_manager', 'ceo', 'chairman',
+    ];
+    const ORG_DYNAMIC_TYPES = ['project_owner', 'department_manager', 'business_unit_head'];
+
+    for (const step of template.steps) {
+      if (!step.isRequired) continue;
+      for (const approver of step.approvers) {
+        const t = approver.approverType;
+
+        if (t === 'applicant_direct_manager') {
+          if (params.applicantId) {
+            const org = await this.prisma.userOrgAssignment.findFirst({
+              where: { userId: params.applicantId, isPrimary: true, directManagerUserId: { not: null } },
+            });
+            if (!org?.directManagerUserId) {
+              errors.push(`步驟「${step.stepName}」需要直屬主管，但申請人尚未設定直屬主管。`);
+            }
+          }
+        } else if (GROUP_BASED_TYPES.includes(t)) {
+          const resolved = await this.resolveGroupApprovers(t, params);
+          if (!resolved) {
+            errors.push(`步驟「${step.stepName}」的審批角色「${t}」找不到符合條件的審批群組，請在「審批群組」頁面設定。`);
+          }
+        } else if (ORG_DYNAMIC_TYPES.includes(t)) {
+          // 暫不驗證組織動態類型（需要表單內容才能解析）
+        } else if (t === 'user' && !approver.approverUserId) {
+          errors.push(`步驟「${step.stepName}」指定了「指定人員」但未選擇人員。`);
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new BadRequestException({ code: 'APPROVAL_RESOLVE_FAILED', message: '審批流程驗證失敗', errors });
+    }
+
+    return { valid: true, templateId: template.id, templateName: template.name };
   }
 }

@@ -63,7 +63,6 @@ model Company {
   employeeCostAllocations  EmployeeCostAllocation[]
   payrollCostAllocations   PayrollCostAllocationSnapshot[]
   oaFormRequests           OaFormRequest[]       @relation("OaFormCompany")
-  employeeApproverRoles    EmployeeApproverRole[]
 
   @@map("companies")
 }
@@ -224,7 +223,7 @@ model User {
   ownedProjects          Project[]              @relation("ProjectOwner")
   managedDepartments     Department[]           @relation("DepartmentManager")
   organizationLeaderRoles  OrganizationLeader[]
-  employeeApproverRoles    EmployeeApproverRole[]
+  approvalGroupMemberships ApprovalGroupMember[]
   // 成本分攤
   employeeCostAllocations EmployeeCostAllocation[]
   payrollCostAllocations  PayrollCostAllocationSnapshot[]
@@ -1284,29 +1283,63 @@ model AnnouncementTag {
 }
 
 // ═══════════════════════════════════════════════
-// 員工審批職能角色
+// 審批群組系統
+// 設計原則：審批角色描述語意，審批群組承接責任，員工加入群組
 // ═══════════════════════════════════════════════
 
-/// 員工審批職能角色（如：人事專員、財務主管）
-/// 用於審批流解析：company_hr → 查找 roleType='hr_specialist', scopeType='company', scopeId=companyId
-model EmployeeApproverRole {
-  id        String    @id @default(uuid()) @db.Uuid
-  userId    String    @db.Uuid              // 員工 → User
-  roleType  String    @db.VarChar(50)       // hr_specialist / hr_manager / finance_specialist / finance_manager / company_head
-  scopeType String    @db.VarChar(20)       // company（公司層級）/ group（集團層級）
-  scopeId   String?   @db.Uuid              // companyId（scopeType=company 時），group 時為 null
-  isActive  Boolean   @default(true)
-  startedAt DateTime? @db.Date
-  endedAt   DateTime? @db.Date
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+/// 審批群組：承接某個審批角色在特定服務範圍內的責任
+/// roleCode 對應 approverType 的枚舉值（company_hr / company_finance / ceo / chairman 等）
+model ApprovalGroup {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(150)              // 群組名稱，如：台灣共用HR審批群組
+  roleCode    String   @db.VarChar(50)               // 對應的審批角色代碼
+  mode        String   @default("primary") @db.VarChar(20) // primary=主要負責人 / any=任一成員
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  user    User     @relation(fields: [userId], references: [id])
-  company Company? @relation(fields: [scopeId], references: [id])
+  members     ApprovalGroupMember[]
+  scopes      ApprovalGroupScope[]
 
-  @@index([roleType, scopeType, scopeId])
+  @@index([roleCode, isActive])
+  @@map("approval_groups")
+}
+
+/// 審批群組成員
+model ApprovalGroupMember {
+  id         String    @id @default(uuid()) @db.Uuid
+  groupId    String    @db.Uuid
+  userId     String    @db.Uuid
+  memberType String    @default("member") @db.VarChar(20) // primary=主要負責人 / backup=備援 / member=一般成員
+  isActive   Boolean   @default(true)
+  startedAt  DateTime? @db.Date                           // 開始日期
+  endedAt    DateTime? @db.Date                           // 結束日期（null=目前有效）
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  group  ApprovalGroup @relation(fields: [groupId], references: [id])
+  user   User          @relation(fields: [userId], references: [id])
+
+  @@index([groupId])
   @@index([userId])
-  @@map("employee_approver_roles")
+  @@map("approval_group_members")
+}
+
+/// 審批群組服務範圍
+/// 定義此群組負責哪些公司/地區/事業部/項目/部門或表單類型
+model ApprovalGroupScope {
+  id        String  @id @default(uuid()) @db.Uuid
+  groupId   String  @db.Uuid
+  scopeType String  @db.VarChar(30) // all | region | company | business_unit | project | department | form_type
+  scopeId   String? @db.Uuid        // 對應組織 ID（scopeType=all / form_type 時為 null）
+  formType  String? @db.VarChar(100) // scopeType=form_type 時填寫表單類型代碼
+  createdAt DateTime @default(now())
+
+  group     ApprovalGroup @relation(fields: [groupId], references: [id])
+
+  @@index([groupId])
+  @@map("approval_group_scopes")
 }
 
 // ═══════════════════════════════════════════════

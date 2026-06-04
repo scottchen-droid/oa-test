@@ -269,6 +269,13 @@
         <el-form-item :label="$t('common.description')">
           <el-input v-model="forms.bu.description" type="textarea" :rows="2" />
         </el-form-item>
+        <el-form-item label="事業部負責人">
+          <el-select v-model="forms.bu.headUserId" clearable filterable remote
+            :remote-method="searchEmployees" :loading="empSearchLoading" style="width:100%" placeholder="搜尋員工">
+            <el-option v-for="u in empSearchResults" :key="u.id" :label="`${u.displayName} (${u.employeeNo})`" :value="u.id" />
+          </el-select>
+          <div class="field-note">設定後審批流「事業部負責人」節點將以此人為主要審批人</div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogs.bu = false">{{ $t('common.cancel') }}</el-button>
@@ -289,6 +296,13 @@
           <el-select v-model="forms.project.businessUnitId" clearable style="width:100%">
             <el-option v-for="b in data.bus" :key="b.id" :label="b.name" :value="b.id" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="項目負責人">
+          <el-select v-model="forms.project.projectOwnerUserId" clearable filterable remote
+            :remote-method="searchEmployees" :loading="empSearchLoading" style="width:100%" placeholder="搜尋員工">
+            <el-option v-for="u in empSearchResults" :key="u.id" :label="`${u.displayName} (${u.employeeNo})`" :value="u.id" />
+          </el-select>
+          <div class="field-note">設定後審批流「項目負責人」節點將以此人為主要審批人</div>
         </el-form-item>
         <el-form-item :label="$t('common.description')">
           <el-input v-model="forms.project.description" type="textarea" :rows="2" />
@@ -390,10 +404,20 @@ import {
   regionsApi, companiesApi, businessUnitsApi, projectsApi,
   departmentsApi, positionsApi, jobLevelsApi,
 } from '@/api/organizations.api'
+import { usersApi } from '@/api/users.api'
 import { useUiStore } from '@/stores/ui.store'
 
 const { t } = useI18n()
 const ui = useUiStore()
+
+const empSearchLoading = ref(false)
+const empSearchResults = ref<any[]>([])
+async function searchEmployees(q: string) {
+  if (!q) return
+  empSearchLoading.value = true
+  try { const r = await usersApi.getAll({ search: q, limit: 20 }); empSearchResults.value = r.items ?? [] }
+  finally { empSearchLoading.value = false }
+}
 
 const activeTab = ref('regions')
 const saving    = ref(false)
@@ -441,8 +465,8 @@ const formRefs: Record<string, any> = {
 const forms = reactive<Record<string, any>>({
   region:   { code: '', name: '', timezone: '', currencyCode: '', defaultLocale: 'zh-TW' },
   company:  { regionId: '', code: '', name: '', legalName: '', taxId: '', currencyCode: '' },
-  bu:       { code: '', name: '', description: '' },
-  project:  { businessUnitId: '', code: '', name: '', description: '', startDate: '', endDate: '' },
+  bu:       { code: '', name: '', description: '', headUserId: '' },
+  project:  { businessUnitId: '', code: '', name: '', projectOwnerUserId: '', description: '', startDate: '', endDate: '' },
   dept:     { companyId: '', parentDepartmentId: '', code: '', name: '' },
   position: { companyId: '', code: '', name: '', description: '' },
   jobLevel: { code: '', name: '', levelOrder: 1, description: '' },
@@ -532,8 +556,8 @@ function resetForm(type: string) {
   const defaults: Record<string, any> = {
     region:   { code: '', name: '', timezone: '', currencyCode: '', defaultLocale: 'zh-TW' },
     company:  { regionId: '', code: '', name: '', legalName: '', taxId: '', currencyCode: '' },
-    bu:       { code: '', name: '', description: '' },
-    project:  { businessUnitId: '', code: '', name: '', description: '', startDate: '', endDate: '' },
+    bu:       { code: '', name: '', description: '', headUserId: '' },
+    project:  { businessUnitId: '', code: '', name: '', projectOwnerUserId: '', description: '', startDate: '', endDate: '' },
     dept:     { companyId: filters.deptCompanyId, parentDepartmentId: '', code: '', name: '' },
     position: { companyId: '', code: '', name: '', description: '' },
     jobLevel: { code: '', name: '', levelOrder: 1, description: '' },
@@ -546,8 +570,8 @@ function mapRowToForm(type: string, row: any) {
   const maps: Record<string, (r: any) => Record<string, any>> = {
     region:   r => ({ code: r.code, name: r.name, timezone: r.timezone ?? '', currencyCode: r.currencyCode ?? '', defaultLocale: r.defaultLocale ?? 'zh-TW' }),
     company:  r => ({ regionId: r.regionId ?? r.region?.id ?? '', code: r.code, name: r.name, legalName: r.legalName ?? '', taxId: r.taxId ?? '', currencyCode: r.currencyCode ?? '' }),
-    bu:       r => ({ code: r.code, name: r.name, description: r.description ?? '' }),
-    project:  r => ({ businessUnitId: r.businessUnitId ?? r.businessUnit?.id ?? '', code: r.code, name: r.name, description: r.description ?? '', startDate: r.startDate?.slice(0,10) ?? '', endDate: r.endDate?.slice(0,10) ?? '' }),
+    bu:       r => ({ code: r.code, name: r.name, description: r.description ?? '', headUserId: r.headUserId ?? r.headUser?.id ?? '' }),
+    project:  r => ({ businessUnitId: r.businessUnitId ?? r.businessUnit?.id ?? '', code: r.code, name: r.name, projectOwnerUserId: r.projectOwnerUserId ?? r.projectOwner?.id ?? '', description: r.description ?? '', startDate: r.startDate?.slice(0,10) ?? '', endDate: r.endDate?.slice(0,10) ?? '' }),
     dept:     r => ({ companyId: r.companyId ?? r.company?.id ?? '', parentDepartmentId: r.parentDepartmentId ?? '', code: r.code, name: r.name }),
     position: r => ({ companyId: r.companyId ?? r.company?.id ?? '', code: r.code, name: r.name, description: r.description ?? '' }),
     jobLevel: r => ({ code: r.code, name: r.name, levelOrder: r.levelOrder, description: r.description ?? '' }),
@@ -616,4 +640,5 @@ async function doToggle(type: string, row: any) {
 .page-header h2 { font-size: 20px; font-weight: 600; margin: 0; }
 .org-tabs { min-height: 400px; }
 .tab-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+.field-note { font-size: 11px; color: #909399; margin-top: 4px; }
 </style>

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Put, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Put, Delete, Body, Param, Query, ParseBoolPipe, Optional } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ApprovalsService } from './approvals.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -49,10 +49,11 @@ export class ApprovalsController {
   @Get('templates')
   @ApiOperation({ summary: 'List approval templates' })
   findAllTemplates(
+    @Query('formType') formType?: string,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.service.findAllTemplates({ page: Number(page), limit: Number(limit) });
+    return this.service.findAllTemplates({ formType, page: Number(page), limit: Number(limit) });
   }
 
   @Get('templates/:id')
@@ -99,46 +100,84 @@ export class ApprovalsController {
 
   // ── 員工審批職能角色 ──────────────────────────────────────
 
-  // ── 員工審批職能角色 ──────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════
+  // 審批群組 CRUD
+  // ══════════════════════════════════════════════════════════════
 
-  @Get('employee-approver-roles/:userId')
-  @ApiOperation({ summary: '取得員工的審批職能角色列表' })
-  getEmployeeApproverRoles(@Param('userId') userId: string) {
-    return this.service.getEmployeeApproverRoles(userId);
-  }
-
-  @Get('approver-role-holder')
-  @ApiOperation({ summary: '查詢特定職能角色目前由誰擔任' })
-  findApproverRoleHolder(
-    @Query('roleType')  roleType:  string,
-    @Query('scopeType') scopeType: string,
-    @Query('scopeId')   scopeId?:  string,
+  @Get('groups')
+  @ApiOperation({ summary: '列出審批群組' })
+  findGroups(
+    @Query('roleCode') roleCode?: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 50,
   ) {
-    return this.service.findApproverRoleHolder({ roleType, scopeType, scopeId });
+    return this.service.findAllGroups({ roleCode, page: Number(page), limit: Number(limit) });
   }
 
-  @Get('approver-role-holders')
-  @ApiOperation({ summary: '列出特定公司/集團所有職能角色的持有人' })
-  listApproverRoleHolders(
-    @Query('scopeType') scopeType?: string,
-    @Query('scopeId')   scopeId?:  string,
+  @Get('groups/:id')
+  @ApiOperation({ summary: '取得審批群組詳情（含成員與範圍）' })
+  getGroup(@Param('id') id: string) {
+    return this.service.getGroup(id);
+  }
+
+  @Post('groups')
+  @ApiOperation({ summary: '新增審批群組' })
+  createGroup(@Body() dto: any) {
+    return this.service.createGroup(dto);
+  }
+
+  @Patch('groups/:id')
+  @ApiOperation({ summary: '更新審批群組基本資訊' })
+  updateGroup(@Param('id') id: string, @Body() dto: any) {
+    return this.service.updateGroup(id, dto);
+  }
+
+  // ── 群組成員 ──────────────────────────────────────────────────
+
+  @Post('groups/:groupId/members')
+  @ApiOperation({ summary: '加入群組成員' })
+  addMember(@Param('groupId') groupId: string, @Body() dto: any) {
+    return this.service.addGroupMember(groupId, dto);
+  }
+
+  @Delete('group-members/:memberId')
+  @ApiOperation({ summary: '移除群組成員（軟刪除）' })
+  removeMember(@Param('memberId') memberId: string) {
+    return this.service.removeGroupMember(memberId);
+  }
+
+  // ── 群組服務範圍 ───────────────────────────────────────────────
+
+  @Post('groups/:groupId/scopes')
+  @ApiOperation({ summary: '新增群組服務範圍' })
+  addScope(@Param('groupId') groupId: string, @Body() dto: any) {
+    return this.service.addGroupScope(groupId, dto);
+  }
+
+  @Delete('group-scopes/:scopeId')
+  @ApiOperation({ summary: '刪除群組服務範圍' })
+  removeScope(@Param('scopeId') scopeId: string) {
+    return this.service.removeGroupScope(scopeId);
+  }
+
+  // ── 解析與驗證 ─────────────────────────────────────────────────
+
+  @Get('groups/resolve/:roleCode')
+  @ApiOperation({ summary: '解析指定角色代碼在上下文中的審批人' })
+  resolveGroup(
+    @Param('roleCode') roleCode: string,
+    @Query('companyId') companyId?: string,
+    @Query('regionId') regionId?: string,
+    @Query('businessUnitId') businessUnitId?: string,
+    @Query('projectId') projectId?: string,
+    @Query('formType') formType?: string,
   ) {
-    return this.service.listApproverRoleHolders({ scopeType, scopeId });
+    return this.service.resolveGroupApprovers(roleCode, { companyId, regionId, businessUnitId, projectId, formType });
   }
 
-  @Post('employee-approver-roles/:userId')
-  @ApiOperation({ summary: '為員工指派審批職能角色（forceReplace=true 時轉移）' })
-  createEmployeeApproverRole(
-    @Param('userId') userId: string,
-    @Body() dto: any,
-  ) {
-    const { forceReplace, ...rest } = dto;
-    return this.service.createEmployeeApproverRole(userId, rest, !!forceReplace);
-  }
-
-  @Delete('employee-approver-roles/:roleId')
-  @ApiOperation({ summary: '移除員工審批職能角色（軟刪除）' })
-  deleteEmployeeApproverRole(@Param('roleId') roleId: string) {
-    return this.service.deleteEmployeeApproverRole(roleId);
+  @Post('validate-form')
+  @ApiOperation({ summary: '送出前驗證表單的審批流程是否完整' })
+  validateForm(@Body() dto: any) {
+    return this.service.validateFormApprovalReady(dto);
   }
 }
