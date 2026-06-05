@@ -141,13 +141,26 @@ const JOB_LEVELS: Array<{ code: string; name: string; levelOrder: number; descri
 // 5. 審批模板（標準三步驟流程）
 // ══════════════════════════════════════════════════════
 
+interface TemplateStepDef {
+  stepOrder: number;
+  stepName: string;
+  approverType: string;
+  approvalMode: string;
+  scopeConfig?: Record<string, string>;
+}
+
 interface TemplateDef {
   code: string;
   name: string;
   formType: string;
   approvalRouteType: string;
-  steps: Array<{ stepOrder: number; stepName: string; approverType: string; approvalMode: string }>;
+  steps: TemplateStepDef[];
 }
+
+const PROJECT_LEAD = { approverType: 'lead',    scopeConfig: { groupType: 'project',       groupResolution: 'applicant_project' } };
+const BU_LEAD      = { approverType: 'lead',    scopeConfig: { groupType: 'business_unit', groupResolution: 'applicant_bu' } };
+const CO_HR        = { approverType: 'hr',      scopeConfig: { groupType: 'company',       groupResolution: 'applicant_company' } };
+const CO_FINANCE   = { approverType: 'finance', scopeConfig: { groupType: 'company',       groupResolution: 'applicant_company' } };
 
 const APPROVAL_TEMPLATES: TemplateDef[] = [
   {
@@ -155,7 +168,7 @@ const APPROVAL_TEMPLATES: TemplateDef[] = [
     steps: [
       { stepOrder: 1, stepName: '直屬主管審核',   approverType: 'applicant_direct_manager', approvalMode: 'any' },
       { stepOrder: 2, stepName: '部門主管審核',   approverType: 'department_manager',       approvalMode: 'any' },
-      { stepOrder: 3, stepName: '項目負責人確認', approverType: 'project_owner',            approvalMode: 'any' },
+      { stepOrder: 3, stepName: '項目負責人確認', ...PROJECT_LEAD,                           approvalMode: 'any' },
     ],
   },
   {
@@ -163,7 +176,7 @@ const APPROVAL_TEMPLATES: TemplateDef[] = [
     steps: [
       { stepOrder: 1, stepName: '直屬主管審核',   approverType: 'applicant_direct_manager', approvalMode: 'any' },
       { stepOrder: 2, stepName: '部門主管審核',   approverType: 'department_manager',       approvalMode: 'any' },
-      { stepOrder: 3, stepName: '項目負責人確認', approverType: 'project_owner',            approvalMode: 'any' },
+      { stepOrder: 3, stepName: '項目負責人確認', ...PROJECT_LEAD,                           approvalMode: 'any' },
     ],
   },
   {
@@ -171,7 +184,7 @@ const APPROVAL_TEMPLATES: TemplateDef[] = [
     steps: [
       { stepOrder: 1, stepName: '直屬主管審核',   approverType: 'applicant_direct_manager', approvalMode: 'any' },
       { stepOrder: 2, stepName: '部門主管審核',   approverType: 'department_manager',       approvalMode: 'any' },
-      { stepOrder: 3, stepName: '項目負責人確認', approverType: 'project_owner',            approvalMode: 'any' },
+      { stepOrder: 3, stepName: '項目負責人確認', ...PROJECT_LEAD,                           approvalMode: 'any' },
     ],
   },
   {
@@ -179,7 +192,7 @@ const APPROVAL_TEMPLATES: TemplateDef[] = [
     steps: [
       { stepOrder: 1, stepName: '直屬主管審核',   approverType: 'applicant_direct_manager', approvalMode: 'any' },
       { stepOrder: 2, stepName: '部門主管審核',   approverType: 'department_manager',       approvalMode: 'any' },
-      { stepOrder: 3, stepName: '項目負責人確認', approverType: 'project_owner',            approvalMode: 'any' },
+      { stepOrder: 3, stepName: '項目負責人確認', ...PROJECT_LEAD,                           approvalMode: 'any' },
     ],
   },
   {
@@ -187,7 +200,7 @@ const APPROVAL_TEMPLATES: TemplateDef[] = [
     steps: [
       { stepOrder: 1, stepName: '直屬主管審核',   approverType: 'applicant_direct_manager', approvalMode: 'any' },
       { stepOrder: 2, stepName: '部門主管審核',   approverType: 'department_manager',       approvalMode: 'any' },
-      { stepOrder: 3, stepName: '項目負責人確認', approverType: 'project_owner',            approvalMode: 'any' },
+      { stepOrder: 3, stepName: '項目負責人確認', ...PROJECT_LEAD,                           approvalMode: 'any' },
     ],
   },
   {
@@ -195,7 +208,7 @@ const APPROVAL_TEMPLATES: TemplateDef[] = [
     steps: [
       { stepOrder: 1, stepName: '直屬主管審核',   approverType: 'applicant_direct_manager', approvalMode: 'any' },
       { stepOrder: 2, stepName: '部門主管審核',   approverType: 'department_manager',       approvalMode: 'any' },
-      { stepOrder: 3, stepName: '項目負責人確認', approverType: 'project_owner',            approvalMode: 'any' },
+      { stepOrder: 3, stepName: '項目負責人確認', ...PROJECT_LEAD,                           approvalMode: 'any' },
     ],
   },
   {
@@ -203,7 +216,7 @@ const APPROVAL_TEMPLATES: TemplateDef[] = [
     steps: [
       { stepOrder: 1, stepName: '直屬主管審核',   approverType: 'applicant_direct_manager', approvalMode: 'any' },
       { stepOrder: 2, stepName: '部門主管審核',   approverType: 'department_manager',       approvalMode: 'any' },
-      { stepOrder: 3, stepName: '項目負責人確認', approverType: 'project_owner',            approvalMode: 'any' },
+      { stepOrder: 3, stepName: '項目負責人確認', ...PROJECT_LEAD,                           approvalMode: 'any' },
     ],
   },
   {
@@ -211,7 +224,7 @@ const APPROVAL_TEMPLATES: TemplateDef[] = [
     steps: [
       { stepOrder: 1, stepName: '直屬主管審核',   approverType: 'applicant_direct_manager', approvalMode: 'any' },
       { stepOrder: 2, stepName: '部門主管審核',   approverType: 'department_manager',       approvalMode: 'any' },
-      { stepOrder: 3, stepName: '項目負責人確認', approverType: 'project_owner',            approvalMode: 'any' },
+      { stepOrder: 3, stepName: '項目負責人確認', ...PROJECT_LEAD,                           approvalMode: 'any' },
     ],
   },
   {
@@ -219,7 +232,7 @@ const APPROVAL_TEMPLATES: TemplateDef[] = [
     steps: [
       { stepOrder: 1, stepName: '直屬主管審核',   approverType: 'applicant_direct_manager', approvalMode: 'any' },
       { stepOrder: 2, stepName: '部門主管審核',   approverType: 'department_manager',       approvalMode: 'any' },
-      { stepOrder: 3, stepName: '項目負責人確認', approverType: 'project_owner',            approvalMode: 'any' },
+      { stepOrder: 3, stepName: '項目負責人確認', ...PROJECT_LEAD,                           approvalMode: 'any' },
     ],
   },
   {
@@ -227,7 +240,7 @@ const APPROVAL_TEMPLATES: TemplateDef[] = [
     steps: [
       { stepOrder: 1, stepName: '直屬主管審核',   approverType: 'applicant_direct_manager', approvalMode: 'any' },
       { stepOrder: 2, stepName: '部門主管審核',   approverType: 'department_manager',       approvalMode: 'any' },
-      { stepOrder: 3, stepName: '項目負責人確認', approverType: 'project_owner',            approvalMode: 'any' },
+      { stepOrder: 3, stepName: '項目負責人確認', ...PROJECT_LEAD,                           approvalMode: 'any' },
     ],
   },
   {
@@ -235,7 +248,7 @@ const APPROVAL_TEMPLATES: TemplateDef[] = [
     steps: [
       { stepOrder: 1, stepName: '直屬主管確認',    approverType: 'applicant_direct_manager', approvalMode: 'any' },
       { stepOrder: 2, stepName: '部門主管確認',    approverType: 'department_manager',       approvalMode: 'any' },
-      { stepOrder: 3, stepName: '事業部負責人確認', approverType: 'business_unit_head',      approvalMode: 'any' },
+      { stepOrder: 3, stepName: '事業部負責人確認', ...BU_LEAD,                               approvalMode: 'any' },
     ],
   },
   {
@@ -243,15 +256,15 @@ const APPROVAL_TEMPLATES: TemplateDef[] = [
     steps: [
       { stepOrder: 1, stepName: '直屬主管確認',    approverType: 'applicant_direct_manager', approvalMode: 'any' },
       { stepOrder: 2, stepName: '部門主管確認',    approverType: 'department_manager',       approvalMode: 'any' },
-      { stepOrder: 3, stepName: '事業部負責人確認', approverType: 'business_unit_head',      approvalMode: 'any' },
+      { stepOrder: 3, stepName: '事業部負責人確認', ...BU_LEAD,                               approvalMode: 'any' },
     ],
   },
   {
     code: 'TPL-PAYROLL',   name: '薪資申請審批流',      formType: 'payroll_request',        approvalRouteType: 'office_org',
     steps: [
       { stepOrder: 1, stepName: '直屬主管確認', approverType: 'applicant_direct_manager', approvalMode: 'any' },
-      { stepOrder: 2, stepName: '公司 HR 審核', approverType: 'company_hr',               approvalMode: 'any' },
-      { stepOrder: 3, stepName: '公司財務確認', approverType: 'company_finance',           approvalMode: 'any' },
+      { stepOrder: 2, stepName: '公司人事審核', ...CO_HR,                                  approvalMode: 'any' },
+      { stepOrder: 3, stepName: '公司財務確認', ...CO_FINANCE,                             approvalMode: 'any' },
     ],
   },
 ];
@@ -351,6 +364,7 @@ async function main() {
           data: {
             approvalTemplateStepId: createdStep.id,
             approverType: step.approverType,
+            scopeConfig: step.scopeConfig ?? undefined,
           },
         });
       }

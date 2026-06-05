@@ -49,7 +49,7 @@ export const approvalsApi = {
     client.delete(`/api/approvals/group-scopes/${scopeId}`).then(r => r.data.data),
 
   // 解析與驗證
-  resolveGroup: (roleCode: string, params?: { companyId?: string; regionId?: string; businessUnitId?: string; projectId?: string; formType?: string }) =>
+  resolveGroup: (roleCode: string, params: { groupType: string; companyId?: string; regionId?: string; businessUnitId?: string; projectId?: string; departmentId?: string; formType?: string }) =>
     client.get(`/api/approvals/groups/resolve/${roleCode}`, { params }).then(r => r.data.data),
   validateForm: (dto: { formType: string; amount?: number; companyId?: string; regionId?: string; businessUnitId?: string; projectId?: string; applicantId?: string }) =>
     client.post('/api/approvals/validate-form', dto).then(r => r.data.data),
@@ -60,14 +60,10 @@ export interface ApproverConfig {
   approverUserId?: string
   approverRoleCode?: string
   scopeConfig?: {
-    projectResolution?: 'applicant_project' | 'specific_project'
-    projectId?: string
-    departmentResolution?: 'applicant_department' | 'specific_department'
-    departmentId?: string
-    buResolution?: 'applicant_bu' | 'specific_bu'
+    groupType?: 'company' | 'business_unit' | 'project' | 'department' | 'special'
+    groupResolution?: 'applicant_company' | 'applicant_bu' | 'specific_bu' | 'applicant_project' | 'specific_project' | 'applicant_department'
     businessUnitId?: string
-    companyResolution?: 'applicant_company' | 'specific_company'
-    companyId?: string
+    projectId?: string
   }
 }
 

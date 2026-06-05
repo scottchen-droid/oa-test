@@ -667,31 +667,30 @@ model ApprovalTemplateStepApprover {
   approvalTemplateStepId String   @db.Uuid
   approverType           String   @db.VarChar(100)
   // approverType 可用值：
-  //   applicant_direct_manager   申請人直屬主管（自動解析，無需 scope）
-  //   department_manager         部門主管（需 scopeConfig.departmentResolution）
-  //   project_owner              項目負責人（需 scopeConfig.projectResolution）
-  //   business_unit_head         事業部負責人（需 scopeConfig.buResolution）
-  //   company_hr                 公司人事專員（需 scopeConfig.companyResolution，從 employee_approver_roles 解析）
-  //   company_hr_manager         公司人事主管（同上）
-  //   company_finance            公司財務人員（同上）
-  //   company_finance_manager    公司財務主管（同上）
-  //   group_hr                   集團人事人員（無需 scope，從 employee_approver_roles 解析）
-  //   group_finance              集團財務人員（同上）
+  //   ── 動態組織解析型（無需 scopeConfig）──────────────────────────────────
+  //   applicant_direct_manager   申請人直屬主管
+  //   department_manager         部門主管
+  //   ── 審批群組解析型（需 scopeConfig.groupType）──────────────────────────
+  //   lead                       負責人
+  //   hr                         人事專員
+  //   hr_manager                 人事主管
+  //   finance                    財務人員
+  //   finance_manager            財務主管
+  //   ceo                        執行長（groupType 固定為 special）
+  //   chairman                   董事長（groupType 固定為 special）
+  //   ── 指定型 ────────────────────────────────────────────────────────────
   //   role                       指定系統角色（approverRoleCode）
   //   user                       指定人員（approverUserId）
   approverUserId         String?  @db.Uuid           // approverType=user 時使用
   approverRoleCode       String?  @db.VarChar(100)   // approverType=role 時使用
-  scopeConfig            Json?                       // 範圍設定（見下方說明）
-  // scopeConfig 格式（依 approverType 使用不同欄位）：
+  scopeConfig            Json?                       // 群組解析型必填，動態解析型不需要
+  // scopeConfig 格式：
   // {
-  //   projectResolution: 'applicant_project' | 'specific_project',
-  //   projectId: 'uuid',         // specific_project 時使用
-  //   departmentResolution: 'applicant_department' | 'specific_department',
-  //   departmentId: 'uuid',
-  //   buResolution: 'applicant_bu' | 'specific_bu',
-  //   businessUnitId: 'uuid',
-  //   companyResolution: 'applicant_company' | 'specific_company',
-  //   companyId: 'uuid',
+  //   groupType: 'company' | 'business_unit' | 'project' | 'department' | 'special',
+  //   groupResolution: 'applicant_company' | 'applicant_bu' | 'applicant_project'
+  //                  | 'applicant_department' | 'specific_bu' | 'specific_project',
+  //   businessUnitId: 'uuid',    // groupResolution=specific_bu 時使用
+  //   projectId: 'uuid',         // groupResolution=specific_project 時使用
   // }
   createdAt              DateTime @default(now())
 

@@ -207,46 +207,47 @@
           <div v-for="(apv, ai) in step.approvers" :key="ai" class="approver-row">
             <span class="approver-seq">{{ ai + 1 }}</span>
 
-            <el-select v-model="apv.approverType" size="small" style="width:210px" @change="onApproverTypeChange(apv)">
+            <!-- 角色選擇 -->
+            <el-select v-model="apv.approverType" size="small" style="width:180px" @change="onApproverTypeChange(apv)">
               <el-option-group v-for="g in APPROVER_GROUPS" :key="g.label" :label="g.label">
                 <el-option v-for="opt in g.options" :key="opt.value" :label="opt.label" :value="opt.value" />
               </el-option-group>
             </el-select>
 
-            <!-- 動態組織類型的範圍設定 -->
-            <template v-if="needsProjectScope(apv.approverType)">
-              <el-select v-model="apv.scopeConfig.projectResolution" size="small" style="width:150px">
-                <el-option value="applicant_project" label="申請人所在項目" />
-                <el-option value="specific_project"  label="指定項目" />
-              </el-select>
-              <el-select v-if="apv.scopeConfig.projectResolution === 'specific_project'"
-                v-model="apv.scopeConfig.projectId" size="small" filterable style="width:150px" placeholder="選擇項目">
-                <el-option v-for="p in orgProjects" :key="p.id" :label="p.name" :value="p.id" />
-              </el-select>
+            <!-- 群組解析型：分組選擇 -->
+            <template v-if="isGroupBased(apv.approverType)">
+              <template v-if="!isSpecialType(apv.approverType)">
+                <el-select v-model="apv.scopeConfig.groupType" size="small" style="width:100px"
+                  placeholder="分組" @change="onGroupTypeChange(apv)">
+                  <el-option v-for="g in GROUP_TYPE_OPTIONS" :key="g.value" :label="g.label" :value="g.value" />
+                </el-select>
+                <!-- 項目：申請人所在 or 指定 -->
+                <template v-if="apv.scopeConfig.groupType === 'project'">
+                  <el-select v-model="apv.scopeConfig.groupResolution" size="small" style="width:130px">
+                    <el-option value="applicant_project" label="申請人所在項目" />
+                    <el-option value="specific_project"  label="指定項目" />
+                  </el-select>
+                  <el-select v-if="apv.scopeConfig.groupResolution === 'specific_project'"
+                    v-model="apv.scopeConfig.projectId" size="small" filterable style="width:130px" placeholder="選擇項目">
+                    <el-option v-for="p in orgProjects" :key="p.id" :label="p.name" :value="p.id" />
+                  </el-select>
+                </template>
+                <!-- 事業部：申請人所在 or 指定 -->
+                <template v-else-if="apv.scopeConfig.groupType === 'business_unit'">
+                  <el-select v-model="apv.scopeConfig.groupResolution" size="small" style="width:130px">
+                    <el-option value="applicant_bu" label="申請人所在事業部" />
+                    <el-option value="specific_bu"  label="指定事業部" />
+                  </el-select>
+                  <el-select v-if="apv.scopeConfig.groupResolution === 'specific_bu'"
+                    v-model="apv.scopeConfig.businessUnitId" size="small" filterable style="width:130px" placeholder="選擇事業部">
+                    <el-option v-for="b in orgBUs" :key="b.id" :label="b.name" :value="b.id" />
+                  </el-select>
+                </template>
+              </template>
+              <span v-else class="group-hint">特殊層級（全集團）</span>
             </template>
 
-            <template v-else-if="needsBUScope(apv.approverType)">
-              <el-select v-model="apv.scopeConfig.buResolution" size="small" style="width:150px">
-                <el-option value="applicant_bu"  label="申請人所在事業部" />
-                <el-option value="specific_bu"   label="指定事業部" />
-              </el-select>
-              <el-select v-if="apv.scopeConfig.buResolution === 'specific_bu'"
-                v-model="apv.scopeConfig.businessUnitId" size="small" filterable style="width:150px" placeholder="選擇事業部">
-                <el-option v-for="b in orgBUs" :key="b.id" :label="b.name" :value="b.id" />
-              </el-select>
-            </template>
-
-            <template v-else-if="needsDeptScope(apv.approverType)">
-              <el-select v-model="apv.scopeConfig.departmentResolution" size="small" style="width:150px">
-                <el-option value="applicant_department" label="申請人所在部門" />
-                <el-option value="specific_department"  label="指定部門" />
-              </el-select>
-            </template>
-
-            <template v-else-if="isGroupBased(apv.approverType)">
-              <span class="group-hint">透過審批群組解析</span>
-            </template>
-
+            <!-- 指定人員 -->
             <template v-else-if="apv.approverType === 'user'">
               <el-select v-model="apv.approverUserId" size="small" filterable remote
                 :remote-method="searchUsers" :loading="userSearchLoading" style="width:200px" placeholder="搜尋並指定人員">
@@ -319,7 +320,7 @@
           <el-table-column label="類型" width="110">
             <template #default="{ row }">
               <el-tag :type="row.memberType === 'primary' ? 'success' : row.memberType === 'backup' ? 'warning' : ''" size="small">
-                {{ { primary: '主要負責人', backup: '備援', member: '一般成員' }[row.memberType] ?? row.memberType }}
+                {{ ({ primary: '主要負責人', backup: '備援', member: '一般成員' } as Record<string, string>)[row.memberType] ?? row.memberType }}
               </el-tag>
             </template>
           </el-table-column>
@@ -426,7 +427,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
@@ -468,54 +469,41 @@ const ROUTE_TYPE_OPTIONS = [
 
 // 審批角色定義（說明用）
 const APPROVAL_ROLE_DEFS = [
-  { code: 'applicant_direct_manager', name: '申請人直屬主管', category: 'dynamic',       description: '從員工組織歸屬中取得直屬主管，動態解析，無需設定群組' },
-  { code: 'department_manager',       name: '部門主管',       category: 'dynamic',       description: '從組織負責人表中解析，可指定申請人部門或特定部門' },
-  { code: 'project_owner',            name: '項目負責人',     category: 'dynamic',       description: '從組織負責人表中解析，可指定申請人項目或特定項目' },
-  { code: 'business_unit_head',       name: '事業部負責人',   category: 'dynamic',       description: '從組織負責人表中解析，可指定申請人事業部或特定事業部' },
-  { code: 'company_hr',               name: '公司人事專員',   category: 'group',         description: '從審批群組解析，群組服務範圍設定負責哪些公司' },
-  { code: 'company_hr_manager',       name: '公司人事主管',   category: 'group',         description: '從審批群組解析，群組服務範圍設定負責哪些公司' },
-  { code: 'company_finance',          name: '公司財務人員',   category: 'group',         description: '從審批群組解析，群組服務範圍設定負責哪些公司' },
-  { code: 'company_finance_manager',  name: '公司財務主管',   category: 'group',         description: '從審批群組解析，群組服務範圍設定負責哪些公司' },
-  { code: 'group_hr',                 name: '集團人事人員',   category: 'group',         description: '從審批群組解析，群組服務範圍設為「全集團」' },
-  { code: 'group_finance',            name: '集團財務人員',   category: 'group',         description: '從審批群組解析，群組服務範圍設為「全集團」' },
-  { code: 'group_finance_manager',    name: '集團財務主管',   category: 'group',         description: '從審批群組解析，群組服務範圍設為「全集團」' },
-  { code: 'ceo',                      name: '執行長',         category: 'group',         description: '從審批群組解析，群組内通常只有一位 primary 成員' },
-  { code: 'chairman',                 name: '董事長',         category: 'group',         description: '從審批群組解析，群組内通常只有一位 primary 成員' },
+  { code: 'applicant_direct_manager', name: '申請人直屬主管', category: 'dynamic', description: '從員工組織歸屬中取得直屬主管，動態解析，無需設定群組' },
+  { code: 'department_manager',       name: '部門主管',       category: 'dynamic', description: '從部門資料解析部門主管，動態解析，無需設定群組' },
+  { code: 'lead',                     name: '負責人',         category: 'group',   description: '依分組類型從審批群組解析對應負責人（需同時選擇分組）' },
+  { code: 'hr',                       name: '人事專員',       category: 'group',   description: '依分組類型從審批群組解析對應人事專員' },
+  { code: 'hr_manager',               name: '人事主管',       category: 'group',   description: '依分組類型從審批群組解析對應人事主管' },
+  { code: 'finance',                  name: '財務人員',       category: 'group',   description: '依分組類型從審批群組解析對應財務人員' },
+  { code: 'finance_manager',          name: '財務主管',       category: 'group',   description: '依分組類型從審批群組解析對應財務主管' },
+  { code: 'ceo',                      name: '執行長',         category: 'group',   description: '特殊層級，從審批群組解析，群組內通常只有一位 primary 成員' },
+  { code: 'chairman',                 name: '董事長',         category: 'group',   description: '特殊層級，從審批群組解析，群組內通常只有一位 primary 成員' },
 ]
 
-// 可建立群組的角色（group_based 類型）
+// 可建立群組的角色（group 類型）
 const GROUP_ROLE_OPTIONS = APPROVAL_ROLE_DEFS
   .filter(r => r.category === 'group')
   .map(r => ({ value: r.code, label: r.name }))
 
-// 步驟審批人分組
+// 步驟審批人分組選項（角色欄位）
 const APPROVER_GROUPS = [
   {
     label: '動態解析型（從組織架構自動找人）',
     options: [
       { value: 'applicant_direct_manager', label: '申請人直屬主管' },
       { value: 'department_manager',       label: '部門主管' },
-      { value: 'project_owner',            label: '項目負責人' },
-      { value: 'business_unit_head',       label: '事業部負責人' },
     ],
   },
   {
-    label: '公司職能角色（透過審批群組解析）',
+    label: '分組 + 角色（透過審批群組解析）',
     options: [
-      { value: 'company_hr',              label: '公司人事專員' },
-      { value: 'company_hr_manager',      label: '公司人事主管' },
-      { value: 'company_finance',         label: '公司財務人員' },
-      { value: 'company_finance_manager', label: '公司財務主管' },
-    ],
-  },
-  {
-    label: '集團職能角色（透過審批群組解析）',
-    options: [
-      { value: 'group_hr',                label: '集團人事人員' },
-      { value: 'group_finance',           label: '集團財務人員' },
-      { value: 'group_finance_manager',   label: '集團財務主管' },
-      { value: 'ceo',                     label: '執行長' },
-      { value: 'chairman',                label: '董事長' },
+      { value: 'lead',            label: '負責人' },
+      { value: 'hr',              label: '人事專員' },
+      { value: 'hr_manager',      label: '人事主管' },
+      { value: 'finance',         label: '財務人員' },
+      { value: 'finance_manager', label: '財務主管' },
+      { value: 'ceo',             label: '執行長（特殊）' },
+      { value: 'chairman',        label: '董事長（特殊）' },
     ],
   },
   {
@@ -524,14 +512,19 @@ const APPROVER_GROUPS = [
   },
 ]
 
-const GROUP_BASED_TYPES = new Set([
-  'company_hr','company_hr_manager','company_finance','company_finance_manager',
-  'group_hr','group_finance','group_finance_manager','ceo','chairman',
-])
-function needsProjectScope(t: string) { return t === 'project_owner' }
-function needsBUScope(t: string) { return t === 'business_unit_head' }
-function needsDeptScope(t: string) { return t === 'department_manager' }
-function isGroupBased(t: string) { return GROUP_BASED_TYPES.has(t) }
+// 分組類型選項
+const GROUP_TYPE_OPTIONS = [
+  { value: 'company',       label: '公司' },
+  { value: 'business_unit', label: '事業部' },
+  { value: 'project',       label: '項目' },
+  { value: 'department',    label: '部門' },
+]
+
+const GROUP_BASED_TYPES = new Set(['lead', 'hr', 'hr_manager', 'finance', 'finance_manager', 'ceo', 'chairman'])
+const SPECIAL_TYPES     = new Set(['ceo', 'chairman'])
+
+function isGroupBased(t: string)  { return GROUP_BASED_TYPES.has(t) }
+function isSpecialType(t: string) { return SPECIAL_TYPES.has(t) }
 
 function roleName(code: string) {
   return APPROVAL_ROLE_DEFS.find(r => r.code === code)?.name ?? code
@@ -661,9 +654,26 @@ function removeApprover(si: number, ai: number) { editSteps.value[si].approvers.
 function onApproverTypeChange(apv: EditApprover) {
   apv.scopeConfig = {}
   apv.approverUserId = undefined
-  if (needsProjectScope(apv.approverType)) apv.scopeConfig.projectResolution = 'applicant_project'
-  if (needsBUScope(apv.approverType))      apv.scopeConfig.buResolution       = 'applicant_bu'
-  if (needsDeptScope(apv.approverType))    apv.scopeConfig.departmentResolution = 'applicant_department'
+  if (isGroupBased(apv.approverType)) {
+    if (isSpecialType(apv.approverType)) {
+      apv.scopeConfig.groupType = 'special'
+    } else {
+      apv.scopeConfig.groupType = 'company'
+      apv.scopeConfig.groupResolution = 'applicant_company'
+    }
+  }
+}
+
+function onGroupTypeChange(apv: EditApprover) {
+  const defaults: Record<string, string> = {
+    company:       'applicant_company',
+    business_unit: 'applicant_bu',
+    project:       'applicant_project',
+    department:    'applicant_department',
+  }
+  apv.scopeConfig.groupResolution = defaults[apv.scopeConfig.groupType] ?? 'applicant_company'
+  delete apv.scopeConfig.projectId
+  delete apv.scopeConfig.businessUnitId
 }
 
 async function handleStepsSave() {

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -451,10 +451,12 @@ export class ApprovalsService {
 
   /**
    * 解析群組審批人
-   * 優先序：company scope > region scope > all scope
-   * 回傳所有匹配成員，由呼叫方依群組 mode 決定通知誰
+   * context.groupType 決定用哪個分組維度來匹配：
+   *   company | business_unit | project | department → 嚴格比對對應 scope
+   *   special → 比對 scopeType=all（執行長、董事長等集團層級）
    */
   async resolveGroupApprovers(roleCode: string, context: {
+    groupType: string;           // 分組類型（來自 scopeConfig.groupType）
     companyId?: string;
     regionId?: string;
     businessUnitId?: string;
@@ -476,40 +478,28 @@ export class ApprovalsService {
 
     if (!allGroups.length) return null;
 
-    // 計算每個群組與 context 的匹配分數（越精確越高）
-    const SCOPE_PRIORITY: Record<string, number> = {
-      department: 6, project: 5, business_unit: 4, company: 3, region: 2, form_type: 1, all: 0,
+    // 依 groupType 決定比對的 scopeType 與對應的 context 值
+    const scopeContextMap: Record<string, string | undefined> = {
+      company:       context.companyId,
+      business_unit: context.businessUnitId,
+      project:       context.projectId,
+      department:    context.departmentId,
     };
+    const isSpecial = context.groupType === 'special';
+    const targetScopeId = scopeContextMap[context.groupType];
 
-    let bestGroup: typeof allGroups[0] | null = null;
-    let bestScore = -1;
+    const matchedGroup = allGroups.find((group) =>
+      group.scopes.some((scope) => {
+        if (isSpecial) return scope.scopeType === 'all';
+        return scope.scopeType === context.groupType && scope.scopeId === targetScopeId;
+      }),
+    );
 
-    for (const group of allGroups) {
-      let score = -1;
-      for (const scope of group.scopes) {
-        let matches = false;
-        switch (scope.scopeType) {
-          case 'all':           matches = true; break;
-          case 'company':       matches = !!context.companyId && scope.scopeId === context.companyId; break;
-          case 'region':        matches = !!context.regionId  && scope.scopeId === context.regionId; break;
-          case 'business_unit': matches = !!context.businessUnitId && scope.scopeId === context.businessUnitId; break;
-          case 'project':       matches = !!context.projectId && scope.scopeId === context.projectId; break;
-          case 'department':    matches = !!context.departmentId && scope.scopeId === context.departmentId; break;
-          case 'form_type':     matches = !!context.formType && scope.formType === context.formType; break;
-        }
-        if (matches) {
-          const priority = SCOPE_PRIORITY[scope.scopeType] ?? 0;
-          if (priority > score) score = priority;
-        }
-      }
-      if (score > bestScore) { bestScore = score; bestGroup = group; }
-    }
+    if (!matchedGroup) return null;
 
-    if (!bestGroup || bestScore < 0) return null;
-
-    const member = bestGroup.mode === 'primary'
-      ? bestGroup.members.find(m => m.memberType === 'primary') ?? bestGroup.members[0]
-      : bestGroup.members[0];
+    const member = matchedGroup.mode === 'primary'
+      ? matchedGroup.members.find(m => m.memberType === 'primary') ?? matchedGroup.members[0]
+      : matchedGroup.members[0];
 
     if (!member) return null;
 
@@ -517,9 +507,9 @@ export class ApprovalsService {
       userId:      member.userId,
       displayName: member.user.displayName,
       memberType:  member.memberType,
-      groupId:     bestGroup.id,
-      groupName:   bestGroup.name,
-      mode:        bestGroup.mode,
+      groupId:     matchedGroup.id,
+      groupName:   matchedGroup.name,
+      mode:        matchedGroup.mode,
     };
   }
 
@@ -573,11 +563,7 @@ export class ApprovalsService {
     const errors: string[] = [];
 
     // 2. 驗證每個必要步驟是否能解析審批人
-    const GROUP_BASED_TYPES = [
-      'company_hr', 'company_hr_manager', 'company_finance', 'company_finance_manager',
-      'group_hr', 'group_finance', 'group_finance_manager', 'ceo', 'chairman',
-    ];
-    const ORG_DYNAMIC_TYPES = ['project_owner', 'department_manager', 'business_unit_head'];
+    const GROUP_BASED_TYPES = ['lead', 'hr', 'hr_manager', 'finance', 'finance_manager', 'ceo', 'chairman'];
 
     for (const step of template.steps) {
       if (!step.isRequired) continue;
@@ -594,12 +580,12 @@ export class ApprovalsService {
             }
           }
         } else if (GROUP_BASED_TYPES.includes(t)) {
-          const resolved = await this.resolveGroupApprovers(t, params);
+          const scopeConfig = (approver.scopeConfig ?? {}) as Record<string, string>;
+          const groupType = scopeConfig['groupType'] ?? 'special';
+          const resolved = await this.resolveGroupApprovers(t, { groupType, ...params });
           if (!resolved) {
-            errors.push(`步驟「${step.stepName}」的審批角色「${t}」找不到符合條件的審批群組，請在「審批群組」頁面設定。`);
+            errors.push(`步驟「${step.stepName}」的審批角色「${t}」（分組：${groupType}）找不到符合條件的審批群組，請在「審批群組」頁面設定。`);
           }
-        } else if (ORG_DYNAMIC_TYPES.includes(t)) {
-          // 暫不驗證組織動態類型（需要表單內容才能解析）
         } else if (t === 'user' && !approver.approverUserId) {
           errors.push(`步驟「${step.stepName}」指定了「指定人員」但未選擇人員。`);
         }

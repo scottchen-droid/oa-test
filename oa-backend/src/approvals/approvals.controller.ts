@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Put, Delete, Body, Param, Query, ParseBoolPipe, Optional } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ApprovalsService } from './approvals.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -163,16 +163,18 @@ export class ApprovalsController {
   // ── 解析與驗證 ─────────────────────────────────────────────────
 
   @Get('groups/resolve/:roleCode')
-  @ApiOperation({ summary: '解析指定角色代碼在上下文中的審批人' })
+  @ApiOperation({ summary: '解析指定角色代碼在上下文中的審批人（groupType 必填）' })
   resolveGroup(
     @Param('roleCode') roleCode: string,
+    @Query('groupType') groupType: string,
     @Query('companyId') companyId?: string,
     @Query('regionId') regionId?: string,
     @Query('businessUnitId') businessUnitId?: string,
     @Query('projectId') projectId?: string,
+    @Query('departmentId') departmentId?: string,
     @Query('formType') formType?: string,
   ) {
-    return this.service.resolveGroupApprovers(roleCode, { companyId, regionId, businessUnitId, projectId, formType });
+    return this.service.resolveGroupApprovers(roleCode, { groupType, companyId, regionId, businessUnitId, projectId, departmentId, formType });
   }
 
   @Post('validate-form')
