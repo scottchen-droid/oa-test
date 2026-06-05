@@ -1,7 +1,6 @@
 import {
   Injectable,
   UnauthorizedException,
-  NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -52,10 +51,7 @@ export class AuthService {
 
     await this.prisma.user.update({
       where: { id: user.id },
-      data: {
-        lastLoginAt: new Date(),
-        refreshToken: tokens.refreshToken,
-      },
+      data: { lastLoginAt: new Date() },
     });
 
     const { passwordHash, ...safeUser } = user;
@@ -63,8 +59,17 @@ export class AuthService {
   }
 
   async refreshToken(token: string) {
-    const user = await this.prisma.user.findFirst({
-      where: { refreshToken: token },
+    let payload: { sub: string; email: string };
+    try {
+      payload = this.jwtService.verify(token, {
+        secret: this.configService.get<string>('jwt.refreshSecret'),
+      });
+    } catch {
+      throw new UnauthorizedException('Refresh token expired');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
       select: { id: true, email: true, status: true },
     });
 
@@ -72,28 +77,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    try {
-      this.jwtService.verify(token, {
-        secret: this.configService.get<string>('jwt.refreshSecret'),
-      });
-    } catch {
-      throw new UnauthorizedException('Refresh token expired');
-    }
-
-    const tokens = await this.generateTokens(user.id, user.email);
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { refreshToken: tokens.refreshToken },
-    });
-
-    return tokens;
+    return this.generateTokens(user.id, user.email);
   }
 
-  async logout(userId: string) {
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { refreshToken: null },
-    });
+  async logout(_userId: string) {
+    // JWT-based auth — no server-side token storage; access tokens expire naturally
   }
 
   async forgotPassword(email: string) {

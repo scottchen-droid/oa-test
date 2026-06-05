@@ -207,7 +207,7 @@ model User {
   passwordChangedAt      DateTime?                                   // 密碼最後修改時間（用於強制重新登入判斷）
   passwordResetToken     String?   @db.VarChar(255)                  // 密碼重置 token（單次有效）
   passwordResetExpiresAt DateTime?                                   // 密碼重置 token 到期時間
-  refreshToken           String?                                     // JWT Refresh Token（登出後清空）
+  refreshToken           String?                                     // 已棄用（保留欄位，不再用於 session 驗證；支援多裝置同時登入）
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
