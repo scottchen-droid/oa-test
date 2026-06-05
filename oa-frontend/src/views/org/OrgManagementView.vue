@@ -199,150 +199,185 @@
     </el-tabs>
 
     <!-- ── 地區 Dialog ──────────────────────────────────────── -->
-    <el-dialog v-model="dialogs.region" :title="editRow.region ? $t('org.editRegion') : $t('org.createRegion')" width="460px">
-      <el-form ref="regionRef" :model="forms.region" :rules="baseRules" label-width="110px">
-        <el-form-item :label="$t('common.code')" prop="code">
-          <el-input v-model="forms.region.code" :disabled="!!editRow.region" />
-        </el-form-item>
-        <el-form-item :label="$t('common.name')" prop="name">
-          <el-input v-model="forms.region.name" />
-        </el-form-item>
-        <el-form-item :label="$t('org.timezone')">
-          <el-input v-model="forms.region.timezone" placeholder="如 Asia/Taipei" />
-        </el-form-item>
-        <el-form-item :label="$t('org.currencyCode')">
-          <el-input v-model="forms.region.currencyCode" placeholder="如 TWD" />
-        </el-form-item>
-        <el-form-item :label="$t('org.defaultLocale')">
-          <el-select v-model="forms.region.defaultLocale" style="width:100%">
-            <el-option label="繁體中文 (zh-TW)" value="zh-TW" />
-            <el-option label="简体中文 (zh-CN)" value="zh-CN" />
-            <el-option label="English (en)"      value="en" />
-          </el-select>
-        </el-form-item>
-      </el-form>
+    <el-dialog v-model="dialogs.region" :title="editRow.region ? $t('org.editRegion') : $t('org.createRegion')" width="620px">
+      <el-tabs v-model="dialogTab">
+        <el-tab-pane label="基本資訊" name="info">
+          <el-form ref="regionRef" :model="forms.region" :rules="baseRules" label-width="110px" style="margin-top:8px">
+            <el-form-item :label="$t('common.code')" prop="code">
+              <el-input v-model="forms.region.code" :disabled="!!editRow.region" />
+            </el-form-item>
+            <el-form-item :label="$t('common.name')" prop="name">
+              <el-input v-model="forms.region.name" />
+            </el-form-item>
+            <el-form-item :label="$t('org.timezone')">
+              <el-input v-model="forms.region.timezone" placeholder="如 Asia/Taipei" />
+            </el-form-item>
+            <el-form-item :label="$t('org.currencyCode')">
+              <el-input v-model="forms.region.currencyCode" placeholder="如 TWD" />
+            </el-form-item>
+            <el-form-item :label="$t('org.defaultLocale')">
+              <el-select v-model="forms.region.defaultLocale" style="width:100%">
+                <el-option label="繁體中文 (zh-TW)" value="zh-TW" />
+                <el-option label="简体中文 (zh-CN)" value="zh-CN" />
+                <el-option label="English (en)"      value="en" />
+              </el-select>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane v-if="editRow.region" label="審批職能" name="assignments">
+          <ApprovalAssignmentPanel scope-type="region" :scope-id="editRow.region.id" style="margin-top:8px" />
+        </el-tab-pane>
+      </el-tabs>
       <template #footer>
         <el-button @click="dialogs.region = false">{{ $t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="saving" @click="doSave('region')">{{ $t('common.confirm') }}</el-button>
+        <el-button v-if="dialogTab === 'info'" type="primary" :loading="saving" @click="doSave('region')">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- ── 公司 Dialog ──────────────────────────────────────── -->
-    <el-dialog v-model="dialogs.company" :title="editRow.company ? $t('org.editCompany') : $t('org.createCompany')" width="480px">
-      <el-form ref="companyRef" :model="forms.company" :rules="baseRules" label-width="110px">
-        <el-form-item :label="$t('common.code')" prop="code">
-          <el-input v-model="forms.company.code" :disabled="!!editRow.company" />
-        </el-form-item>
-        <el-form-item :label="$t('org.companyName')" prop="name">
-          <el-input v-model="forms.company.name" />
-        </el-form-item>
-        <el-form-item :label="$t('org.legalName')">
-          <el-input v-model="forms.company.legalName" />
-        </el-form-item>
-        <el-form-item :label="$t('org.region')" prop="regionId">
-          <el-select v-model="forms.company.regionId" style="width:100%">
-            <el-option v-for="r in data.regions" :key="r.id" :label="r.name" :value="r.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="$t('org.taxId')">
-          <el-input v-model="forms.company.taxId" />
-        </el-form-item>
-        <el-form-item :label="$t('org.currencyCode')">
-          <el-input v-model="forms.company.currencyCode" placeholder="如 TWD" />
-        </el-form-item>
-      </el-form>
+    <el-dialog v-model="dialogs.company" :title="editRow.company ? $t('org.editCompany') : $t('org.createCompany')" width="620px">
+      <el-tabs v-model="dialogTab">
+        <el-tab-pane label="基本資訊" name="info">
+          <el-form ref="companyRef" :model="forms.company" :rules="baseRules" label-width="110px" style="margin-top:8px">
+            <el-form-item :label="$t('common.code')" prop="code">
+              <el-input v-model="forms.company.code" :disabled="!!editRow.company" />
+            </el-form-item>
+            <el-form-item :label="$t('org.companyName')" prop="name">
+              <el-input v-model="forms.company.name" />
+            </el-form-item>
+            <el-form-item :label="$t('org.legalName')">
+              <el-input v-model="forms.company.legalName" />
+            </el-form-item>
+            <el-form-item :label="$t('org.region')" prop="regionId">
+              <el-select v-model="forms.company.regionId" style="width:100%">
+                <el-option v-for="r in data.regions" :key="r.id" :label="r.name" :value="r.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item :label="$t('org.taxId')">
+              <el-input v-model="forms.company.taxId" />
+            </el-form-item>
+            <el-form-item :label="$t('org.currencyCode')">
+              <el-input v-model="forms.company.currencyCode" placeholder="如 TWD" />
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane v-if="editRow.company" label="審批職能" name="assignments">
+          <ApprovalAssignmentPanel scope-type="company" :scope-id="editRow.company.id" style="margin-top:8px" />
+        </el-tab-pane>
+      </el-tabs>
       <template #footer>
         <el-button @click="dialogs.company = false">{{ $t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="saving" @click="doSave('company')">{{ $t('common.confirm') }}</el-button>
+        <el-button v-if="dialogTab === 'info'" type="primary" :loading="saving" @click="doSave('company')">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- ── 事業部 Dialog ────────────────────────────────────── -->
-    <el-dialog v-model="dialogs.bu" :title="editRow.bu ? $t('org.editBU') : $t('org.createBU')" width="460px">
-      <el-form ref="buRef" :model="forms.bu" :rules="baseRules" label-width="100px">
-        <el-form-item :label="$t('common.code')" prop="code">
-          <el-input v-model="forms.bu.code" :disabled="!!editRow.bu" />
-        </el-form-item>
-        <el-form-item :label="$t('common.name')" prop="name">
-          <el-input v-model="forms.bu.name" />
-        </el-form-item>
-        <el-form-item :label="$t('common.description')">
-          <el-input v-model="forms.bu.description" type="textarea" :rows="2" />
-        </el-form-item>
-        <el-form-item label="事業部負責人">
-          <el-select v-model="forms.bu.headUserId" clearable filterable remote
-            :remote-method="searchEmployees" :loading="empSearchLoading" style="width:100%" placeholder="搜尋員工">
-            <el-option v-for="u in empSearchResults" :key="u.id" :label="`${u.displayName} (${u.employeeNo})`" :value="u.id" />
-          </el-select>
-          <div class="field-note">設定後審批流「事業部負責人」節點將以此人為主要審批人</div>
-        </el-form-item>
-      </el-form>
+    <el-dialog v-model="dialogs.bu" :title="editRow.bu ? $t('org.editBU') : $t('org.createBU')" width="620px">
+      <el-tabs v-model="dialogTab">
+        <el-tab-pane label="基本資訊" name="info">
+          <el-form ref="buRef" :model="forms.bu" :rules="baseRules" label-width="100px" style="margin-top:8px">
+            <el-form-item :label="$t('common.code')" prop="code">
+              <el-input v-model="forms.bu.code" :disabled="!!editRow.bu" />
+            </el-form-item>
+            <el-form-item :label="$t('common.name')" prop="name">
+              <el-input v-model="forms.bu.name" />
+            </el-form-item>
+            <el-form-item :label="$t('common.description')">
+              <el-input v-model="forms.bu.description" type="textarea" :rows="2" />
+            </el-form-item>
+            <el-form-item label="事業部負責人">
+              <el-select v-model="forms.bu.headUserId" clearable filterable remote
+                :remote-method="searchEmployees" :loading="empSearchLoading" style="width:100%" placeholder="搜尋員工">
+                <el-option v-for="u in empSearchResults" :key="u.id" :label="`${u.displayName} (${u.employeeNo})`" :value="u.id" />
+              </el-select>
+              <div class="field-note">設定後審批流「事業部負責人」節點將以此人為主要審批人</div>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane v-if="editRow.bu" label="審批職能" name="assignments">
+          <ApprovalAssignmentPanel scope-type="business_unit" :scope-id="editRow.bu.id" style="margin-top:8px" />
+        </el-tab-pane>
+      </el-tabs>
       <template #footer>
         <el-button @click="dialogs.bu = false">{{ $t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="saving" @click="doSave('bu')">{{ $t('common.confirm') }}</el-button>
+        <el-button v-if="dialogTab === 'info'" type="primary" :loading="saving" @click="doSave('bu')">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- ── 項目 Dialog ──────────────────────────────────────── -->
-    <el-dialog v-model="dialogs.project" :title="editRow.project ? $t('org.editProject') : $t('org.createProject')" width="460px">
-      <el-form ref="projectRef" :model="forms.project" :rules="baseRules" label-width="100px">
-        <el-form-item :label="$t('common.code')" prop="code">
-          <el-input v-model="forms.project.code" :disabled="!!editRow.project" />
-        </el-form-item>
-        <el-form-item :label="$t('common.name')" prop="name">
-          <el-input v-model="forms.project.name" />
-        </el-form-item>
-        <el-form-item :label="$t('org.businessUnit')">
-          <el-select v-model="forms.project.businessUnitId" clearable style="width:100%">
-            <el-option v-for="b in data.bus" :key="b.id" :label="b.name" :value="b.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="項目負責人">
-          <el-select v-model="forms.project.projectOwnerUserId" clearable filterable remote
-            :remote-method="searchEmployees" :loading="empSearchLoading" style="width:100%" placeholder="搜尋員工">
-            <el-option v-for="u in empSearchResults" :key="u.id" :label="`${u.displayName} (${u.employeeNo})`" :value="u.id" />
-          </el-select>
-          <div class="field-note">設定後審批流「項目負責人」節點將以此人為主要審批人</div>
-        </el-form-item>
-        <el-form-item :label="$t('common.description')">
-          <el-input v-model="forms.project.description" type="textarea" :rows="2" />
-        </el-form-item>
-        <el-form-item :label="$t('common.startDate')">
-          <el-date-picker v-model="forms.project.startDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
-        </el-form-item>
-        <el-form-item :label="$t('common.endDate')">
-          <el-date-picker v-model="forms.project.endDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
-        </el-form-item>
-      </el-form>
+    <el-dialog v-model="dialogs.project" :title="editRow.project ? $t('org.editProject') : $t('org.createProject')" width="620px">
+      <el-tabs v-model="dialogTab">
+        <el-tab-pane label="基本資訊" name="info">
+          <el-form ref="projectRef" :model="forms.project" :rules="baseRules" label-width="100px" style="margin-top:8px">
+            <el-form-item :label="$t('common.code')" prop="code">
+              <el-input v-model="forms.project.code" :disabled="!!editRow.project" />
+            </el-form-item>
+            <el-form-item :label="$t('common.name')" prop="name">
+              <el-input v-model="forms.project.name" />
+            </el-form-item>
+            <el-form-item :label="$t('org.businessUnit')">
+              <el-select v-model="forms.project.businessUnitId" clearable style="width:100%">
+                <el-option v-for="b in data.bus" :key="b.id" :label="b.name" :value="b.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="項目負責人">
+              <el-select v-model="forms.project.projectOwnerUserId" clearable filterable remote
+                :remote-method="searchEmployees" :loading="empSearchLoading" style="width:100%" placeholder="搜尋員工">
+                <el-option v-for="u in empSearchResults" :key="u.id" :label="`${u.displayName} (${u.employeeNo})`" :value="u.id" />
+              </el-select>
+              <div class="field-note">設定後審批流「項目負責人」節點將以此人為主要審批人</div>
+            </el-form-item>
+            <el-form-item :label="$t('common.description')">
+              <el-input v-model="forms.project.description" type="textarea" :rows="2" />
+            </el-form-item>
+            <el-form-item :label="$t('common.startDate')">
+              <el-date-picker v-model="forms.project.startDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+            </el-form-item>
+            <el-form-item :label="$t('common.endDate')">
+              <el-date-picker v-model="forms.project.endDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane v-if="editRow.project" label="審批職能" name="assignments">
+          <ApprovalAssignmentPanel scope-type="project" :scope-id="editRow.project.id" style="margin-top:8px" />
+        </el-tab-pane>
+      </el-tabs>
       <template #footer>
         <el-button @click="dialogs.project = false">{{ $t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="saving" @click="doSave('project')">{{ $t('common.confirm') }}</el-button>
+        <el-button v-if="dialogTab === 'info'" type="primary" :loading="saving" @click="doSave('project')">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- ── 部門 Dialog ──────────────────────────────────────── -->
-    <el-dialog v-model="dialogs.dept" :title="editRow.dept ? $t('org.editDept') : $t('org.createDept')" width="460px">
-      <el-form ref="deptRef" :model="forms.dept" :rules="baseRules" label-width="110px">
-        <el-form-item :label="$t('org.company')">
-          <el-select v-model="forms.dept.companyId" style="width:100%">
-            <el-option v-for="c in data.companies" :key="c.id" :label="c.name" :value="c.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="$t('org.parentDept')">
-          <el-select v-model="forms.dept.parentDepartmentId" clearable placeholder="無（頂層部門）" style="width:100%">
-            <el-option v-for="d in data.depts.filter((d: any) => d.id !== editRow.dept?.id)" :key="d.id" :label="d.name" :value="d.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="$t('common.code')" prop="code">
-          <el-input v-model="forms.dept.code" />
-        </el-form-item>
-        <el-form-item :label="$t('common.name')" prop="name">
-          <el-input v-model="forms.dept.name" />
-        </el-form-item>
-      </el-form>
+    <el-dialog v-model="dialogs.dept" :title="editRow.dept ? $t('org.editDept') : $t('org.createDept')" width="620px">
+      <el-tabs v-model="dialogTab">
+        <el-tab-pane label="基本資訊" name="info">
+          <el-form ref="deptRef" :model="forms.dept" :rules="baseRules" label-width="110px" style="margin-top:8px">
+            <el-form-item :label="$t('org.company')">
+              <el-select v-model="forms.dept.companyId" style="width:100%">
+                <el-option v-for="c in data.companies" :key="c.id" :label="c.name" :value="c.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item :label="$t('org.parentDept')">
+              <el-select v-model="forms.dept.parentDepartmentId" clearable placeholder="無（頂層部門）" style="width:100%">
+                <el-option v-for="d in data.depts.filter((d: any) => d.id !== editRow.dept?.id)" :key="d.id" :label="d.name" :value="d.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item :label="$t('common.code')" prop="code">
+              <el-input v-model="forms.dept.code" />
+            </el-form-item>
+            <el-form-item :label="$t('common.name')" prop="name">
+              <el-input v-model="forms.dept.name" />
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane v-if="editRow.dept" label="審批職能" name="assignments">
+          <ApprovalAssignmentPanel scope-type="department" :scope-id="editRow.dept.id" style="margin-top:8px" />
+        </el-tab-pane>
+      </el-tabs>
       <template #footer>
         <el-button @click="dialogs.dept = false">{{ $t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="saving" @click="doSave('dept')">{{ $t('common.confirm') }}</el-button>
+        <el-button v-if="dialogTab === 'info'" type="primary" :loading="saving" @click="doSave('dept')">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
@@ -406,6 +441,7 @@ import {
 } from '@/api/organizations.api'
 import { usersApi } from '@/api/users.api'
 import { useUiStore } from '@/stores/ui.store'
+import ApprovalAssignmentPanel from '@/components/ApprovalAssignmentPanel.vue'
 
 const { t } = useI18n()
 const ui = useUiStore()
@@ -419,8 +455,9 @@ async function searchEmployees(q: string) {
   finally { empSearchLoading.value = false }
 }
 
-const activeTab = ref('regions')
-const saving    = ref(false)
+const activeTab  = ref('regions')
+const saving     = ref(false)
+const dialogTab  = ref('info')
 
 // ── Loading flags ─────────────────────────────────────────────
 const loading = reactive({
@@ -543,12 +580,14 @@ onMounted(async () => {
 function openCreate(type: string) {
   editRow[type] = null
   resetForm(type)
+  dialogTab.value = 'info'
   dialogs[type] = true
 }
 
 function openEdit(type: string, row: any) {
   editRow[type] = row
   mapRowToForm(type, row)
+  dialogTab.value = 'info'
   dialogs[type] = true
 }
 

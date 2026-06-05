@@ -59,8 +59,8 @@
         <el-alert type="info" :closable="false" style="margin-bottom:16px">
           <template #title>
             審批角色定義流程節點的語意（「這一關要找哪一類人？」），
-            實際負責人透過<strong>審批群組</strong>設定。
-            動態解析類型（直屬主管、部門主管等）從組織架構直接解析，無需設定群組。
+            實際負責人透過<strong>帳號管理</strong>或<strong>分組管理</strong>中的「審批職能」設定。
+            動態解析類型（直屬主管、部門主管等）從組織架構直接解析，無需設定。
           </template>
         </el-alert>
 
@@ -70,56 +70,11 @@
           <el-table-column prop="category" label="解析方式" width="130">
             <template #default="{ row }">
               <el-tag :type="row.category === 'dynamic' ? 'success' : 'primary'" size="small">
-                {{ row.category === 'dynamic' ? '組織動態解析' : '審批群組解析' }}
+                {{ row.category === 'dynamic' ? '組織動態解析' : '審批對應解析' }}
               </el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="description" label="說明" show-overflow-tooltip />
-        </el-table>
-      </el-tab-pane>
-
-      <!-- ══════════════════════════════════════════════
-           Tab 3: 審批群組
-      ══════════════════════════════════════════════ -->
-      <el-tab-pane label="審批群組" name="groups">
-        <div class="tab-toolbar">
-          <el-select v-model="groupRoleFilter" placeholder="篩選角色類型" clearable style="width:200px" @change="loadGroups">
-            <el-option v-for="r in GROUP_ROLE_OPTIONS" :key="r.value" :label="r.label" :value="r.value" />
-          </el-select>
-          <el-button type="primary" :icon="Plus" @click="openCreateGroup">新增群組</el-button>
-        </div>
-
-        <el-table v-loading="groupsLoading" :data="groups" border stripe>
-          <el-table-column prop="name" label="群組名稱" min-width="180" />
-          <el-table-column label="負責角色" width="180">
-            <template #default="{ row }">
-              <el-tag size="small">{{ roleName(row.roleCode) }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="處理模式" width="110" align="center">
-            <template #default="{ row }">
-              <el-tag :type="row.mode === 'primary' ? '' : 'warning'" size="small">
-                {{ row.mode === 'primary' ? '主要負責人' : '任一成員' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="成員數" width="80" align="center">
-            <template #default="{ row }">{{ row.members?.length ?? 0 }}</template>
-          </el-table-column>
-          <el-table-column label="服務範圍" min-width="160" show-overflow-tooltip>
-            <template #default="{ row }">{{ scopeSummary(row.scopes) }}</template>
-          </el-table-column>
-          <el-table-column label="狀態" width="80">
-            <template #default="{ row }">
-              <el-tag :type="row.isActive ? 'success' : 'info'" size="small">{{ row.isActive ? '啟用' : '停用' }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="160" fixed="right">
-            <template #default="{ row }">
-              <el-button text size="small" @click="openEditGroup(row)">編輯</el-button>
-              <el-button text size="small" type="primary" @click="openGroupDetail(row)">成員/範圍</el-button>
-            </template>
-          </el-table-column>
         </el-table>
       </el-tab-pane>
 
@@ -160,7 +115,7 @@
           <template #title>
             <b>串簽</b>：<code>approvalMode=any</code> 任一人通過即可。
             <b>並簽</b>：<code>approvalMode=all</code> 全部審批人都需簽核。
-            職能角色類型（公司HR、財務等）透過<b>審批群組</b>解析，無需在此設定公司範圍。
+            職能角色類型（HR、財務等）透過<b>審批對應</b>解析，在帳號管理或分組管理中設定。
           </template>
         </el-alert>
       </div>
@@ -267,162 +222,6 @@
       </template>
     </el-drawer>
 
-    <!-- ════ 新增/編輯群組 Dialog ════ -->
-    <el-dialog v-model="groupDialogVisible" :title="editingGroup ? '編輯審批群組' : '新增審批群組'" width="480px">
-      <el-form :model="groupForm" label-width="100px">
-        <el-form-item label="群組名稱">
-          <el-input v-model="groupForm.name" placeholder="如：台灣共用HR審批群組" />
-        </el-form-item>
-        <el-form-item label="負責角色">
-          <el-select v-model="groupForm.roleCode" style="width:100%" :disabled="!!editingGroup">
-            <el-option v-for="r in GROUP_ROLE_OPTIONS" :key="r.value" :label="r.label" :value="r.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="處理模式">
-          <el-radio-group v-model="groupForm.mode">
-            <el-radio value="primary">主要負責人（primary 成員審批）</el-radio>
-            <el-radio value="any">任一成員（群組中任一人審批）</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="groupForm.description" type="textarea" :rows="2" />
-        </el-form-item>
-        <el-form-item v-if="editingGroup" label="狀態">
-          <el-switch v-model="groupForm.isActive" active-text="啟用" inactive-text="停用" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="groupDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="groupSaving" @click="handleGroupSave">確定</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- ════ 群組成員/範圍管理 Drawer ════ -->
-    <el-drawer v-model="groupDetailDrawer" :title="`群組設定 — ${activeGroup?.name ?? ''}`" size="600px">
-      <template v-if="activeGroup">
-        <!-- 群組基本資訊 -->
-        <el-descriptions :column="2" border size="small" style="margin-bottom:16px">
-          <el-descriptions-item label="角色">{{ roleName(activeGroup.roleCode) }}</el-descriptions-item>
-          <el-descriptions-item label="模式">{{ activeGroup.mode === 'primary' ? '主要負責人' : '任一成員' }}</el-descriptions-item>
-        </el-descriptions>
-
-        <el-divider content-position="left"><b>群組成員</b></el-divider>
-        <div class="section-toolbar">
-          <el-button type="primary" size="small" :icon="Plus" @click="openAddMember">加入成員</el-button>
-        </div>
-        <el-table :data="activeGroup.members" border size="small" style="margin-bottom:16px">
-          <el-table-column label="員工">
-            <template #default="{ row }">
-              <span>{{ row.user?.displayName }}</span>
-              <span class="emp-no">{{ row.user?.employeeNo }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="類型" width="110">
-            <template #default="{ row }">
-              <el-tag :type="row.memberType === 'primary' ? 'success' : row.memberType === 'backup' ? 'warning' : ''" size="small">
-                {{ ({ primary: '主要負責人', backup: '備援', member: '一般成員' } as Record<string, string>)[row.memberType] ?? row.memberType }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="生效日" width="110" prop="startedAt" />
-          <el-table-column label="操作" width="70" align="center">
-            <template #default="{ row }">
-              <el-button text size="small" type="danger" @click="doRemoveMember(row.id)">移除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <el-divider content-position="left"><b>服務範圍</b></el-divider>
-        <el-alert type="info" :closable="false" style="margin-bottom:10px" title="服務範圍決定此群組負責哪些公司/地區/表單類型。多筆範圍為 OR 關係。" />
-        <div class="section-toolbar">
-          <el-button type="primary" size="small" :icon="Plus" @click="openAddScope">新增範圍</el-button>
-        </div>
-        <el-table :data="activeGroup.scopes" border size="small">
-          <el-table-column label="範圍類型" width="120">
-            <template #default="{ row }">{{ scopeTypeLabel(row.scopeType) }}</template>
-          </el-table-column>
-          <el-table-column label="範圍內容">
-            <template #default="{ row }">{{ scopeValueLabel(row) }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="70" align="center">
-            <template #default="{ row }">
-              <el-button text size="small" type="danger" @click="doRemoveScope(row.id)">刪除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </template>
-    </el-drawer>
-
-    <!-- ════ 加入成員 Dialog ════ -->
-    <el-dialog v-model="addMemberDialog" title="加入群組成員" width="420px">
-      <el-form :model="memberForm" label-width="90px">
-        <el-form-item label="員工">
-          <el-select v-model="memberForm.userId" filterable remote :remote-method="searchUsers"
-            :loading="userSearchLoading" style="width:100%" placeholder="搜尋員工">
-            <el-option v-for="u in userSearchResults" :key="u.id" :label="`${u.displayName} (${u.employeeNo})`" :value="u.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="成員類型">
-          <el-radio-group v-model="memberForm.memberType">
-            <el-radio value="primary">主要負責人</el-radio>
-            <el-radio value="backup">備援</el-radio>
-            <el-radio value="member">一般成員</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="生效日期">
-          <el-date-picker v-model="memberForm.startedAt" type="date" value-format="YYYY-MM-DD" style="width:100%" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="addMemberDialog = false">取消</el-button>
-        <el-button type="primary" :loading="memberSaving" @click="doAddMember">確定</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- ════ 新增服務範圍 Dialog ════ -->
-    <el-dialog v-model="addScopeDialog" title="新增服務範圍" width="460px">
-      <el-form :model="scopeForm" label-width="100px">
-        <el-form-item label="範圍類型">
-          <el-select v-model="scopeForm.scopeType" style="width:100%" @change="scopeForm.scopeId = ''; scopeForm.formType = ''">
-            <el-option value="all"           label="全集團（適用所有申請）" />
-            <el-option value="region"        label="特定地區" />
-            <el-option value="company"       label="特定公司" />
-            <el-option value="business_unit" label="特定事業部" />
-            <el-option value="project"       label="特定項目" />
-            <el-option value="form_type"     label="特定表單類型" />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="scopeForm.scopeType === 'region'" label="地區">
-          <el-select v-model="scopeForm.scopeId" style="width:100%">
-            <el-option v-for="r in orgRegions" :key="r.id" :label="r.name" :value="r.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="scopeForm.scopeType === 'company'" label="公司">
-          <el-select v-model="scopeForm.scopeId" style="width:100%">
-            <el-option v-for="c in orgCompanies" :key="c.id" :label="c.name" :value="c.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="scopeForm.scopeType === 'business_unit'" label="事業部">
-          <el-select v-model="scopeForm.scopeId" style="width:100%">
-            <el-option v-for="b in orgBUs" :key="b.id" :label="b.name" :value="b.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="scopeForm.scopeType === 'project'" label="項目">
-          <el-select v-model="scopeForm.scopeId" style="width:100%">
-            <el-option v-for="p in orgProjects" :key="p.id" :label="p.name" :value="p.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="scopeForm.scopeType === 'form_type'" label="表單類型">
-          <el-select v-model="scopeForm.formType" style="width:100%">
-            <el-option v-for="opt in FORM_TYPE_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="addScopeDialog = false">取消</el-button>
-        <el-button type="primary" :loading="scopeSaving" @click="doAddScope">確定</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -432,7 +231,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { approvalsApi, type ApproverConfig, type StepPayload } from '@/api/approvals.api'
-import { companiesApi, businessUnitsApi, projectsApi, regionsApi } from '@/api/organizations.api'
+import { companiesApi, businessUnitsApi, projectsApi } from '@/api/organizations.api'
 import { usersApi } from '@/api/users.api'
 import { useUiStore } from '@/stores/ui.store'
 import { useTable } from '@/composables/useTable'
@@ -471,19 +270,14 @@ const ROUTE_TYPE_OPTIONS = [
 const APPROVAL_ROLE_DEFS = [
   { code: 'applicant_direct_manager', name: '申請人直屬主管', category: 'dynamic', description: '從員工組織歸屬中取得直屬主管，動態解析，無需設定群組' },
   { code: 'department_manager',       name: '部門主管',       category: 'dynamic', description: '從部門資料解析部門主管，動態解析，無需設定群組' },
-  { code: 'lead',                     name: '負責人',         category: 'group',   description: '依分組類型從審批群組解析對應負責人（需同時選擇分組）' },
-  { code: 'hr',                       name: '人事專員',       category: 'group',   description: '依分組類型從審批群組解析對應人事專員' },
-  { code: 'hr_manager',               name: '人事主管',       category: 'group',   description: '依分組類型從審批群組解析對應人事主管' },
-  { code: 'finance',                  name: '財務人員',       category: 'group',   description: '依分組類型從審批群組解析對應財務人員' },
-  { code: 'finance_manager',          name: '財務主管',       category: 'group',   description: '依分組類型從審批群組解析對應財務主管' },
-  { code: 'ceo',                      name: '執行長',         category: 'group',   description: '特殊層級，從審批群組解析，群組內通常只有一位 primary 成員' },
-  { code: 'chairman',                 name: '董事長',         category: 'group',   description: '特殊層級，從審批群組解析，群組內通常只有一位 primary 成員' },
+  { code: 'lead',                     name: '負責人',         category: 'group',   description: '依分組類型從審批對應解析對應負責人（需同時選擇分組）' },
+  { code: 'hr',                       name: '人事專員',       category: 'group',   description: '依分組類型從審批對應解析對應人事專員' },
+  { code: 'hr_manager',               name: '人事主管',       category: 'group',   description: '依分組類型從審批對應解析對應人事主管' },
+  { code: 'finance',                  name: '財務人員',       category: 'group',   description: '依分組類型從審批對應解析對應財務人員' },
+  { code: 'finance_manager',          name: '財務主管',       category: 'group',   description: '依分組類型從審批對應解析對應財務主管' },
+  { code: 'ceo',                      name: '執行長',         category: 'group',   description: '特殊層級，從審批對應解析，需在帳號管理設定 scopeType=special' },
+  { code: 'chairman',                 name: '董事長',         category: 'group',   description: '特殊層級，從審批對應解析，需在帳號管理設定 scopeType=special' },
 ]
-
-// 可建立群組的角色（group 類型）
-const GROUP_ROLE_OPTIONS = APPROVAL_ROLE_DEFS
-  .filter(r => r.category === 'group')
-  .map(r => ({ value: r.code, label: r.name }))
 
 // 步驟審批人分組選項（角色欄位）
 const APPROVER_GROUPS = [
@@ -495,7 +289,7 @@ const APPROVER_GROUPS = [
     ],
   },
   {
-    label: '分組 + 角色（透過審批群組解析）',
+    label: '分組 + 角色（透過審批對應解析）',
     options: [
       { value: 'lead',            label: '負責人' },
       { value: 'hr',              label: '人事專員' },
@@ -531,19 +325,16 @@ function roleName(code: string) {
 }
 
 // ── Org data ───────────────────────────────────────────────────
-const orgRegions   = ref<any[]>([])
 const orgCompanies = ref<any[]>([])
 const orgBUs       = ref<any[]>([])
 const orgProjects  = ref<any[]>([])
 
 async function loadOrgData() {
-  const [regions, companies, bus, projects] = await Promise.all([
-    regionsApi.getAll(),
+  const [companies, bus, projects] = await Promise.all([
     companiesApi.getAll(),
     businessUnitsApi.getAll(),
     projectsApi.getAll(),
   ])
-  orgRegions.value   = regions
   orgCompanies.value = companies
   orgBUs.value       = bus
   orgProjects.value  = projects
@@ -573,7 +364,6 @@ onMounted(() => {
   ui.setBreadcrumbs([{ title: t('nav.systemModule') }, { title: t('nav.workflows') }])
   fetch()
   loadOrgData()
-  loadGroups()
 })
 
 function onFilter() { pagination.page = 1; fetch({ formType: formTypeFilter.value || undefined }) }
@@ -703,145 +493,6 @@ async function handleStepsSave() {
   } catch { ElMessage.error('儲存失敗') } finally { stepsSaving.value = false }
 }
 
-// ══════════════════════════════════════════════════════════════
-// 審批群組
-// ══════════════════════════════════════════════════════════════
-
-const groups        = ref<any[]>([])
-const groupsLoading = ref(false)
-const groupRoleFilter = ref('')
-const activeGroup   = ref<any>(null)
-
-async function loadGroups() {
-  groupsLoading.value = true
-  try {
-    const res = await approvalsApi.getGroups({ roleCode: groupRoleFilter.value || undefined, limit: 100 })
-    groups.value = res.items ?? res
-  } finally { groupsLoading.value = false }
-}
-
-// ── 新增/編輯群組 ──────────────────────────────────────────────
-const groupDialogVisible = ref(false)
-const editingGroup       = ref<any>(null)
-const groupSaving        = ref(false)
-const groupForm          = reactive({ name: '', roleCode: '', mode: 'primary', description: '', isActive: true })
-
-function openCreateGroup() {
-  editingGroup.value = null
-  Object.assign(groupForm, { name: '', roleCode: '', mode: 'primary', description: '', isActive: true })
-  groupDialogVisible.value = true
-}
-function openEditGroup(row: any) {
-  editingGroup.value = row
-  Object.assign(groupForm, { name: row.name, roleCode: row.roleCode, mode: row.mode, description: row.description ?? '', isActive: row.isActive })
-  groupDialogVisible.value = true
-}
-
-async function handleGroupSave() {
-  if (!groupForm.name || !groupForm.roleCode) { ElMessage.warning('請填寫名稱與負責角色'); return }
-  groupSaving.value = true
-  try {
-    if (editingGroup.value) {
-      await approvalsApi.updateGroup(editingGroup.value.id, { name: groupForm.name, mode: groupForm.mode, description: groupForm.description, isActive: groupForm.isActive })
-    } else {
-      await approvalsApi.createGroup({ name: groupForm.name, roleCode: groupForm.roleCode, mode: groupForm.mode, description: groupForm.description })
-    }
-    ElMessage.success('儲存成功')
-    groupDialogVisible.value = false
-    await loadGroups()
-    if (activeGroup.value && editingGroup.value?.id === activeGroup.value.id) {
-      activeGroup.value = await approvalsApi.getGroup(activeGroup.value.id)
-    }
-  } catch { ElMessage.error('儲存失敗') } finally { groupSaving.value = false }
-}
-
-// ── 群組詳情（成員/範圍）Drawer ─────────────────────────────────
-const groupDetailDrawer = ref(false)
-
-async function openGroupDetail(row: any) {
-  activeGroup.value = await approvalsApi.getGroup(row.id)
-  groupDetailDrawer.value = true
-}
-
-// ── 成員管理 ──────────────────────────────────────────────────
-const addMemberDialog = ref(false)
-const memberSaving    = ref(false)
-const memberForm      = reactive({ userId: '', memberType: 'primary', startedAt: '' })
-
-function openAddMember() {
-  Object.assign(memberForm, { userId: '', memberType: 'primary', startedAt: '' })
-  userSearchResults.value = []
-  addMemberDialog.value = true
-}
-
-async function doAddMember() {
-  if (!memberForm.userId) { ElMessage.warning('請選擇員工'); return }
-  memberSaving.value = true
-  try {
-    await approvalsApi.addGroupMember(activeGroup.value.id, { userId: memberForm.userId, memberType: memberForm.memberType, startedAt: memberForm.startedAt || undefined })
-    ElMessage.success('成員已加入')
-    addMemberDialog.value = false
-    activeGroup.value = await approvalsApi.getGroup(activeGroup.value.id)
-  } catch { ElMessage.error('操作失敗') } finally { memberSaving.value = false }
-}
-
-async function doRemoveMember(memberId: string) {
-  await approvalsApi.removeGroupMember(memberId)
-  ElMessage.success('已移除')
-  activeGroup.value = await approvalsApi.getGroup(activeGroup.value.id)
-}
-
-// ── 服務範圍管理 ───────────────────────────────────────────────
-const addScopeDialog = ref(false)
-const scopeSaving    = ref(false)
-const scopeForm      = reactive({ scopeType: 'all', scopeId: '', formType: '' })
-
-function openAddScope() {
-  Object.assign(scopeForm, { scopeType: 'all', scopeId: '', formType: '' })
-  addScopeDialog.value = true
-}
-
-async function doAddScope() {
-  scopeSaving.value = true
-  try {
-    await approvalsApi.addGroupScope(activeGroup.value.id, {
-      scopeType: scopeForm.scopeType,
-      scopeId:   scopeForm.scopeId   || undefined,
-      formType:  scopeForm.formType  || undefined,
-    })
-    ElMessage.success('範圍已新增')
-    addScopeDialog.value = false
-    activeGroup.value = await approvalsApi.getGroup(activeGroup.value.id)
-  } catch { ElMessage.error('操作失敗') } finally { scopeSaving.value = false }
-}
-
-async function doRemoveScope(scopeId: string) {
-  await approvalsApi.removeGroupScope(scopeId)
-  ElMessage.success('已刪除')
-  activeGroup.value = await approvalsApi.getGroup(activeGroup.value.id)
-}
-
-// ── Display helpers ────────────────────────────────────────────
-function scopeSummary(scopes: any[]): string {
-  if (!scopes?.length) return '未設定'
-  const LABEL: Record<string, string> = { all: '全集團', region: '地區', company: '公司', business_unit: '事業部', project: '項目', department: '部門', form_type: '表單' }
-  const types = [...new Set(scopes.map(s => LABEL[s.scopeType] ?? s.scopeType))]
-  return types.join(' / ') + `（${scopes.length} 筆）`
-}
-
-function scopeTypeLabel(t: string) {
-  const m: Record<string, string> = { all: '全集團', region: '地區', company: '公司', business_unit: '事業部', project: '項目', department: '部門', form_type: '表單類型' }
-  return m[t] ?? t
-}
-
-function scopeValueLabel(scope: any) {
-  if (scope.scopeType === 'all') return '全集團'
-  if (scope.scopeType === 'form_type') return formTypeLabel(scope.formType)
-  if (!scope.scopeId) return '—'
-  const map: Record<string, any[]> = { region: orgRegions.value, company: orgCompanies.value, business_unit: orgBUs.value, project: orgProjects.value }
-  const list = map[scope.scopeType] ?? []
-  return list.find((x: any) => x.id === scope.scopeId)?.name ?? scope.scopeId.slice(0, 8)
-}
 </script>
 
 <style scoped>
@@ -873,7 +524,4 @@ function scopeValueLabel(scope: any) {
 .approver-seq { font-size:12px; color:#909399; min-width:20px; text-align:center; }
 .group-hint { font-size:12px; color:#67c23a; }
 
-/* Groups */
-.section-toolbar { display:flex; gap:10px; margin-bottom:10px; }
-.emp-no { font-size:11px; color:#909399; margin-left:6px; }
 </style>

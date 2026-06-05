@@ -36,35 +36,42 @@
       </el-table>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="editing ? '編輯公司' : '新增公司'" width="560px">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
-        <el-form-item label="所屬地區" prop="regionId">
-          <el-select v-model="form.regionId" style="width: 100%">
-            <el-option v-for="r in regions" :key="r.id" :label="r.name" :value="r.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="代碼" prop="code">
-          <el-input v-model="form.code" :disabled="!!editing" />
-        </el-form-item>
-        <el-form-item label="公司名稱" prop="name">
-          <el-input v-model="form.name" />
-        </el-form-item>
-        <el-form-item label="法定名稱">
-          <el-input v-model="form.legalName" />
-        </el-form-item>
-        <el-form-item label="統一編號">
-          <el-input v-model="form.taxId" />
-        </el-form-item>
-        <el-form-item label="貨幣代碼">
-          <el-input v-model="form.currencyCode" />
-        </el-form-item>
-        <el-form-item label="狀態">
-          <el-switch v-model="form.isActive" active-text="啟用" inactive-text="停用" />
-        </el-form-item>
-      </el-form>
+    <el-dialog v-model="dialogVisible" :title="editing ? '編輯公司' : '新增公司'" width="620px">
+      <el-tabs v-model="activeTab">
+        <el-tab-pane label="基本資訊" name="info">
+          <el-form ref="formRef" :model="form" :rules="rules" label-width="120px" style="margin-top:8px">
+            <el-form-item label="所屬地區" prop="regionId">
+              <el-select v-model="form.regionId" style="width: 100%">
+                <el-option v-for="r in regions" :key="r.id" :label="r.name" :value="r.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="代碼" prop="code">
+              <el-input v-model="form.code" :disabled="!!editing" />
+            </el-form-item>
+            <el-form-item label="公司名稱" prop="name">
+              <el-input v-model="form.name" />
+            </el-form-item>
+            <el-form-item label="法定名稱">
+              <el-input v-model="form.legalName" />
+            </el-form-item>
+            <el-form-item label="統一編號">
+              <el-input v-model="form.taxId" />
+            </el-form-item>
+            <el-form-item label="貨幣代碼">
+              <el-input v-model="form.currencyCode" />
+            </el-form-item>
+            <el-form-item label="狀態">
+              <el-switch v-model="form.isActive" active-text="啟用" inactive-text="停用" />
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane v-if="editing" label="審批職能" name="assignments">
+          <ApprovalAssignmentPanel scope-type="company" :scope-id="editing.id" style="margin-top:8px" />
+        </el-tab-pane>
+      </el-tabs>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSave">確定</el-button>
+        <el-button v-if="activeTab === 'info'" type="primary" :loading="saving" @click="handleSave">確定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -76,6 +83,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { companiesApi, regionsApi } from '@/api/organizations.api'
 import { useUiStore } from '@/stores/ui.store'
+import ApprovalAssignmentPanel from '@/components/ApprovalAssignmentPanel.vue'
 import type { Company, Region } from '@/types'
 
 const ui = useUiStore()
@@ -86,6 +94,7 @@ const regionFilter = ref('')
 const dialogVisible = ref(false)
 const editing = ref<Company | null>(null)
 const saving = ref(false)
+const activeTab = ref('info')
 const formRef = ref<FormInstance>()
 const form = reactive({ regionId: '', code: '', name: '', legalName: '', taxId: '', currencyCode: '', isActive: true })
 
@@ -112,12 +121,14 @@ async function load() {
 
 function openCreate() {
   editing.value = null
+  activeTab.value = 'info'
   Object.assign(form, { regionId: '', code: '', name: '', legalName: '', taxId: '', currencyCode: '', isActive: true })
   dialogVisible.value = true
 }
 
 function openEdit(c: Company) {
   editing.value = c
+  activeTab.value = 'info'
   Object.assign(form, { regionId: c.regionId, code: c.code, name: c.name, legalName: c.legalName ?? '', taxId: c.taxId ?? '', currencyCode: c.currencyCode ?? '', isActive: c.isActive })
   dialogVisible.value = true
 }

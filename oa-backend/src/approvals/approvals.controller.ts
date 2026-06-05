@@ -98,72 +98,52 @@ export class ApprovalsController {
     return this.service.reject(id, { ...dto, approverId: user.sub });
   }
 
-  // ── 員工審批職能角色 ──────────────────────────────────────
-
   // ══════════════════════════════════════════════════════════════
-  // 審批群組 CRUD
+  // 審批對應關聯表 CRUD
   // ══════════════════════════════════════════════════════════════
 
-  @Get('groups')
-  @ApiOperation({ summary: '列出審批群組' })
-  findGroups(
+  @Get('assignments')
+  @ApiOperation({ summary: '查詢審批對應（?scopeType=&scopeId=&roleCode=&userId=）' })
+  listAssignments(
+    @Query('scopeType') scopeType?: string,
+    @Query('scopeId') scopeId?: string,
     @Query('roleCode') roleCode?: string,
+    @Query('userId') userId?: string,
     @Query('page') page = 1,
-    @Query('limit') limit = 50,
+    @Query('limit') limit = 100,
   ) {
-    return this.service.findAllGroups({ roleCode, page: Number(page), limit: Number(limit) });
+    return this.service.listAssignments({
+      scopeType,
+      scopeId: scopeId === 'null' ? null : scopeId,
+      roleCode,
+      userId,
+      page: Number(page),
+      limit: Number(limit),
+    });
   }
 
-  @Get('groups/:id')
-  @ApiOperation({ summary: '取得審批群組詳情（含成員與範圍）' })
-  getGroup(@Param('id') id: string) {
-    return this.service.getGroup(id);
+  @Post('assignments')
+  @ApiOperation({ summary: '新增審批對應（分組+角色+人員，第一筆自動設為預設）' })
+  addAssignment(@Body() dto: any) {
+    return this.service.addAssignment(dto);
   }
 
-  @Post('groups')
-  @ApiOperation({ summary: '新增審批群組' })
-  createGroup(@Body() dto: any) {
-    return this.service.createGroup(dto);
+  @Delete('assignments/:id')
+  @ApiOperation({ summary: '移除審批對應（刪除預設時自動遞補）' })
+  removeAssignment(@Param('id') id: string) {
+    return this.service.removeAssignment(id);
   }
 
-  @Patch('groups/:id')
-  @ApiOperation({ summary: '更新審批群組基本資訊' })
-  updateGroup(@Param('id') id: string, @Body() dto: any) {
-    return this.service.updateGroup(id, dto);
-  }
-
-  // ── 群組成員 ──────────────────────────────────────────────────
-
-  @Post('groups/:groupId/members')
-  @ApiOperation({ summary: '加入群組成員' })
-  addMember(@Param('groupId') groupId: string, @Body() dto: any) {
-    return this.service.addGroupMember(groupId, dto);
-  }
-
-  @Delete('group-members/:memberId')
-  @ApiOperation({ summary: '移除群組成員（軟刪除）' })
-  removeMember(@Param('memberId') memberId: string) {
-    return this.service.removeGroupMember(memberId);
-  }
-
-  // ── 群組服務範圍 ───────────────────────────────────────────────
-
-  @Post('groups/:groupId/scopes')
-  @ApiOperation({ summary: '新增群組服務範圍' })
-  addScope(@Param('groupId') groupId: string, @Body() dto: any) {
-    return this.service.addGroupScope(groupId, dto);
-  }
-
-  @Delete('group-scopes/:scopeId')
-  @ApiOperation({ summary: '刪除群組服務範圍' })
-  removeScope(@Param('scopeId') scopeId: string) {
-    return this.service.removeGroupScope(scopeId);
+  @Patch('assignments/:id/default')
+  @ApiOperation({ summary: '設為預設審批人' })
+  setDefault(@Param('id') id: string) {
+    return this.service.setDefaultAssignment(id);
   }
 
   // ── 解析與驗證 ─────────────────────────────────────────────────
 
-  @Get('groups/resolve/:roleCode')
-  @ApiOperation({ summary: '解析指定角色代碼在上下文中的審批人（groupType 必填）' })
+  @Get('resolve/:roleCode')
+  @ApiOperation({ summary: '解析指定角色在上下文中的預設審批人（groupType 必填）' })
   resolveGroup(
     @Param('roleCode') roleCode: string,
     @Query('groupType') groupType: string,

@@ -317,199 +317,133 @@ export class ApprovalsService {
   }
 
   // ══════════════════════════════════════════════════════════════
-  // 審批群組 CRUD
+  // 審批對應關聯表 CRUD
   // ══════════════════════════════════════════════════════════════
 
-  private groupInclude = {
-    members: {
-      where: { isActive: true },
-      include: { user: { select: { id: true, displayName: true, employeeNo: true, avatarUrl: true } } },
-      orderBy: { memberType: 'asc' as const },
-    },
-    scopes: { orderBy: { scopeType: 'asc' as const } },
-  };
-
-  async findAllGroups(params: { roleCode?: string; isActive?: boolean; page?: number; limit?: number }) {
-    const { roleCode, isActive, page = 1, limit = 50 } = params;
+  async listAssignments(params: {
+    scopeType?: string; scopeId?: string | null; roleCode?: string; userId?: string;
+    page?: number; limit?: number;
+  }) {
+    const { scopeType, scopeId, roleCode, userId, page = 1, limit = 100 } = params;
     const where: any = {};
-    if (roleCode)               where.roleCode = roleCode;
-    if (isActive !== undefined)  where.isActive = isActive;
+    if (scopeType !== undefined) where.scopeType = scopeType;
+    if (scopeId   !== undefined) where.scopeId   = scopeId;
+    if (roleCode  !== undefined) where.roleCode  = roleCode;
+    if (userId    !== undefined) where.userId    = userId;
+
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.approvalGroup.findMany({
-        where, skip: (page - 1) * limit, take: limit,
-        include: this.groupInclude,
-        orderBy: [{ roleCode: 'asc' }, { name: 'asc' }],
+      this.prisma.approvalAssignment.findMany({
+        where,
+        skip:    (page - 1) * limit,
+        take:    limit,
+        include: { user: { select: { id: true, displayName: true, employeeNo: true, avatarUrl: true } } },
+        orderBy: [{ scopeType: 'asc' }, { roleCode: 'asc' }, { isDefault: 'desc' }],
       }),
-      this.prisma.approvalGroup.count({ where }),
+      this.prisma.approvalAssignment.count({ where }),
     ]);
     return { items, total, page, limit };
   }
 
-  async getGroup(id: string) {
-    const g = await this.prisma.approvalGroup.findUnique({
-      where: { id },
-      include: this.groupInclude,
-    });
-    if (!g) throw new NotFoundException('Approval group not found');
-    return g;
-  }
-
-  async createGroup(dto: { name: string; roleCode: string; mode?: string; description?: string }) {
-    return this.prisma.approvalGroup.create({
-      data: {
-        name:        dto.name,
-        roleCode:    dto.roleCode,
-        mode:        dto.mode ?? 'primary',
-        description: dto.description,
-      },
-      include: this.groupInclude,
-    });
-  }
-
-  async updateGroup(id: string, dto: { name?: string; mode?: string; description?: string; isActive?: boolean }) {
-    await this.getGroup(id);
-    return this.prisma.approvalGroup.update({
-      where: { id },
-      data:  dto,
-      include: this.groupInclude,
-    });
-  }
-
-  // ── 群組成員 ──────────────────────────────────────────────────
-
-  async addGroupMember(groupId: string, dto: {
-    userId: string; memberType?: string; startedAt?: string; endedAt?: string;
+  async addAssignment(dto: {
+    scopeType: string; scopeId?: string | null; roleCode: string; userId: string;
   }) {
-    await this.getGroup(groupId);
-    const existing = await this.prisma.approvalGroupMember.findFirst({
-      where: { groupId, userId: dto.userId, isActive: true },
+    const { scopeType, scopeId = null, roleCode, userId } = dto;
+
+    // 防止重複
+    const existing = await this.prisma.approvalAssignment.findFirst({
+      where: { scopeType, scopeId, roleCode, userId },
     });
-    if (existing) {
-      // 更新既有記錄的 memberType
-      return this.prisma.approvalGroupMember.update({
-        where: { id: existing.id },
-        data: {
-          memberType: dto.memberType ?? existing.memberType,
-          startedAt:  dto.startedAt ? new Date(dto.startedAt) : existing.startedAt,
-          endedAt:    dto.endedAt   ? new Date(dto.endedAt)   : existing.endedAt,
-        },
-        include: { user: { select: { id: true, displayName: true, employeeNo: true, avatarUrl: true } } },
-      });
-    }
-    return this.prisma.approvalGroupMember.create({
-      data: {
-        groupId,
-        userId:     dto.userId,
-        memberType: dto.memberType ?? 'member',
-        startedAt:  dto.startedAt ? new Date(dto.startedAt) : null,
-        endedAt:    dto.endedAt   ? new Date(dto.endedAt)   : null,
-      },
+    if (existing) return existing;
+
+    // 是否為此分組+角色的第一筆
+    const count = await this.prisma.approvalAssignment.count({
+      where: { scopeType, scopeId, roleCode },
+    });
+    const isDefault = count === 0;
+
+    return this.prisma.approvalAssignment.create({
+      data: { scopeType, scopeId, roleCode, userId, isDefault },
       include: { user: { select: { id: true, displayName: true, employeeNo: true, avatarUrl: true } } },
     });
   }
 
-  async removeGroupMember(memberId: string) {
-    return this.prisma.approvalGroupMember.update({
-      where: { id: memberId },
-      data:  { isActive: false, endedAt: new Date() },
-    });
+  async removeAssignment(id: string) {
+    const assignment = await this.prisma.approvalAssignment.findUnique({ where: { id } });
+    if (!assignment) throw new NotFoundException('Assignment not found');
+
+    await this.prisma.approvalAssignment.delete({ where: { id } });
+
+    // 若刪除的是預設，且同分組+角色還有其他人員，自動設第一筆為新預設
+    if (assignment.isDefault) {
+      const next = await this.prisma.approvalAssignment.findFirst({
+        where: { scopeType: assignment.scopeType, scopeId: assignment.scopeId, roleCode: assignment.roleCode },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (next) {
+        await this.prisma.approvalAssignment.update({ where: { id: next.id }, data: { isDefault: true } });
+      }
+    }
+
+    return { message: 'Removed' };
   }
 
-  // ── 群組服務範圍 ───────────────────────────────────────────────
+  async setDefaultAssignment(id: string) {
+    const assignment = await this.prisma.approvalAssignment.findUnique({ where: { id } });
+    if (!assignment) throw new NotFoundException('Assignment not found');
 
-  async addGroupScope(groupId: string, dto: {
-    scopeType: string; scopeId?: string; formType?: string;
-  }) {
-    await this.getGroup(groupId);
-    const existing = await this.prisma.approvalGroupScope.findFirst({
-      where: {
-        groupId,
-        scopeType: dto.scopeType,
-        scopeId:   dto.scopeId   ?? null,
-        formType:  dto.formType  ?? null,
-      },
-    });
-    if (existing) return existing; // 已存在，不重複新增
-    return this.prisma.approvalGroupScope.create({
-      data: {
-        groupId,
-        scopeType: dto.scopeType,
-        scopeId:   dto.scopeId  ?? null,
-        formType:  dto.formType ?? null,
-      },
-    });
-  }
-
-  async removeGroupScope(scopeId: string) {
-    return this.prisma.approvalGroupScope.delete({ where: { id: scopeId } });
+    return this.prisma.$transaction([
+      this.prisma.approvalAssignment.updateMany({
+        where: { scopeType: assignment.scopeType, scopeId: assignment.scopeId, roleCode: assignment.roleCode },
+        data:  { isDefault: false },
+      }),
+      this.prisma.approvalAssignment.update({
+        where: { id },
+        data:  { isDefault: true },
+        include: { user: { select: { id: true, displayName: true, employeeNo: true, avatarUrl: true } } },
+      }),
+    ]);
   }
 
   // ══════════════════════════════════════════════════════════════
-  // 審批群組解析引擎
-  // 依據 roleCode + 申請人組織上下文，找出最匹配的群組，再取得審批人
+  // 審批對應解析引擎
   // ══════════════════════════════════════════════════════════════
 
-  /**
-   * 解析群組審批人
-   * context.groupType 決定用哪個分組維度來匹配：
-   *   company | business_unit | project | department → 嚴格比對對應 scope
-   *   special → 比對 scopeType=all（執行長、董事長等集團層級）
-   */
+  /** 依 roleCode + context 查詢預設審批人 */
   async resolveGroupApprovers(roleCode: string, context: {
-    groupType: string;           // 分組類型（來自 scopeConfig.groupType）
+    groupType: string;
     companyId?: string;
     regionId?: string;
     businessUnitId?: string;
     projectId?: string;
     departmentId?: string;
     formType?: string;
-  }): Promise<{ userId: string; displayName: string; memberType: string; groupId: string; groupName: string; mode: string } | null> {
+  }): Promise<{ userId: string; displayName: string; isDefault: boolean } | null> {
 
-    const allGroups = await this.prisma.approvalGroup.findMany({
-      where: { roleCode, isActive: true },
-      include: {
-        scopes: true,
-        members: {
-          where: { isActive: true },
-          include: { user: { select: { id: true, displayName: true } } },
-        },
-      },
-    });
-
-    if (!allGroups.length) return null;
-
-    // 依 groupType 決定比對的 scopeType 與對應的 context 值
-    const scopeContextMap: Record<string, string | undefined> = {
+    const isSpecial = context.groupType === 'special';
+    const scopeIdMap: Record<string, string | undefined> = {
       company:       context.companyId,
       business_unit: context.businessUnitId,
       project:       context.projectId,
       department:    context.departmentId,
     };
-    const isSpecial = context.groupType === 'special';
-    const targetScopeId = scopeContextMap[context.groupType];
+    const scopeId = isSpecial ? null : (scopeIdMap[context.groupType] ?? null);
 
-    const matchedGroup = allGroups.find((group) =>
-      group.scopes.some((scope) => {
-        if (isSpecial) return scope.scopeType === 'all';
-        return scope.scopeType === context.groupType && scope.scopeId === targetScopeId;
-      }),
-    );
+    const assignment = await this.prisma.approvalAssignment.findFirst({
+      where: {
+        roleCode,
+        scopeType: context.groupType,
+        scopeId,
+        isDefault: true,
+      },
+      include: { user: { select: { id: true, displayName: true } } },
+    });
 
-    if (!matchedGroup) return null;
-
-    const member = matchedGroup.mode === 'primary'
-      ? matchedGroup.members.find(m => m.memberType === 'primary') ?? matchedGroup.members[0]
-      : matchedGroup.members[0];
-
-    if (!member) return null;
+    if (!assignment) return null;
 
     return {
-      userId:      member.userId,
-      displayName: member.user.displayName,
-      memberType:  member.memberType,
-      groupId:     matchedGroup.id,
-      groupName:   matchedGroup.name,
-      mode:        matchedGroup.mode,
+      userId:      assignment.userId,
+      displayName: assignment.user.displayName,
+      isDefault:   true,
     };
   }
 
@@ -584,7 +518,7 @@ export class ApprovalsService {
           const groupType = scopeConfig['groupType'] ?? 'special';
           const resolved = await this.resolveGroupApprovers(t, { groupType, ...params });
           if (!resolved) {
-            errors.push(`步驟「${step.stepName}」的審批角色「${t}」（分組：${groupType}）找不到符合條件的審批群組，請在「審批群組」頁面設定。`);
+            errors.push(`步驟「${step.stepName}」的審批角色「${t}」（分組：${groupType}）找不到預設審批人，請在帳號管理或分組管理中設定審批對應。`);
           }
         } else if (t === 'user' && !approver.approverUserId) {
           errors.push(`步驟「${step.stepName}」指定了「指定人員」但未選擇人員。`);

@@ -223,7 +223,7 @@ model User {
   ownedProjects          Project[]              @relation("ProjectOwner")
   managedDepartments     Department[]           @relation("DepartmentManager")
   organizationLeaderRoles  OrganizationLeader[]
-  approvalGroupMemberships ApprovalGroupMember[]
+  approvalAssignments      ApprovalAssignment[]
   // 成本分攤
   employeeCostAllocations EmployeeCostAllocation[]
   payrollCostAllocations  PayrollCostAllocationSnapshot[]
@@ -1287,58 +1287,24 @@ model AnnouncementTag {
 // ═══════════════════════════════════════════════
 
 /// 審批群組：承接某個審批角色在特定服務範圍內的責任
-/// roleCode 對應 approverType 的枚舉值（company_hr / company_finance / ceo / chairman 等）
-model ApprovalGroup {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String   @db.VarChar(150)              // 群組名稱，如：台灣共用HR審批群組
-  roleCode    String   @db.VarChar(50)               // 對應的審批角色代碼
-  mode        String   @default("primary") @db.VarChar(20) // primary=主要負責人 / any=任一成員
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  members     ApprovalGroupMember[]
-  scopes      ApprovalGroupScope[]
-
-  @@index([roleCode, isActive])
-  @@map("approval_groups")
-}
-
-/// 審批群組成員
-model ApprovalGroupMember {
-  id         String    @id @default(uuid()) @db.Uuid
-  groupId    String    @db.Uuid
-  userId     String    @db.Uuid
-  memberType String    @default("member") @db.VarChar(20) // primary=主要負責人 / backup=備援 / member=一般成員
-  isActive   Boolean   @default(true)
-  startedAt  DateTime? @db.Date                           // 開始日期
-  endedAt    DateTime? @db.Date                           // 結束日期（null=目前有效）
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-
-  group  ApprovalGroup @relation(fields: [groupId], references: [id])
-  user   User          @relation(fields: [userId], references: [id])
-
-  @@index([groupId])
-  @@index([userId])
-  @@map("approval_group_members")
-}
-
-/// 審批群組服務範圍
-/// 定義此群組負責哪些公司/地區/事業部/項目/部門或表單類型
-model ApprovalGroupScope {
-  id        String  @id @default(uuid()) @db.Uuid
-  groupId   String  @db.Uuid
-  scopeType String  @db.VarChar(30) // all | region | company | business_unit | project | department | form_type
-  scopeId   String? @db.Uuid        // 對應組織 ID（scopeType=all / form_type 時為 null）
-  formType  String? @db.VarChar(100) // scopeType=form_type 時填寫表單類型代碼
+/// 審批對應關聯表
+/// 記錄「分組 + 角色 → 人員」的對應，每個分組+角色組合必須且只能有一個預設
+model ApprovalAssignment {
+  id        String   @id @default(uuid()) @db.Uuid
+  scopeType String   @db.VarChar(30)    // company | business_unit | project | department | special
+  scopeId   String?  @db.Uuid           // 分組實體 ID（special 時為 null）
+  roleCode  String   @db.VarChar(50)    // lead | hr | hr_manager | finance | finance_manager | ceo | chairman
+  userId    String   @db.Uuid
+  isDefault Boolean  @default(false)    // 每個 scopeType+scopeId+roleCode 組合只能有一個 true
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  group     ApprovalGroup @relation(fields: [groupId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
-  @@index([groupId])
-  @@map("approval_group_scopes")
+  @@unique([scopeType, scopeId, roleCode, userId])
+  @@index([scopeType, scopeId, roleCode])
+  @@index([userId])
+  @@map("approval_assignments")
 }
 
 // ═══════════════════════════════════════════════

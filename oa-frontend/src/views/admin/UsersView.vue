@@ -96,32 +96,39 @@
     </el-card>
 
     <!-- 編輯帳號 Dialog -->
-    <el-dialog v-model="dialogVisible" :title="$t('users.editAccount')" width="520px">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
-        <el-form-item label="Email" prop="email">
-          <el-input v-model="form.email" disabled />
-        </el-form-item>
-        <el-form-item :label="$t('user.displayName')" prop="displayName">
-          <el-input v-model="form.displayName" />
-        </el-form-item>
-        <el-form-item :label="$t('user.nameZh')">
-          <el-input v-model="form.nameZh" />
-        </el-form-item>
-        <el-form-item :label="$t('user.employeeNo')">
-          <el-input v-model="form.employeeNo" />
-        </el-form-item>
-        <el-form-item :label="$t('common.status')">
-          <el-select v-model="form.status" style="width:100%">
-            <el-option :label="$t('status.pending_activation')" value="pending_activation" />
-            <el-option :label="$t('status.active')"             value="active" />
-            <el-option :label="$t('status.suspended')"          value="suspended" />
-            <el-option :label="$t('status.resigned')"           value="resigned" />
-          </el-select>
-        </el-form-item>
-      </el-form>
+    <el-dialog v-model="dialogVisible" :title="$t('users.editAccount')" width="660px">
+      <el-tabs v-model="activeTab">
+        <el-tab-pane label="基本資訊" name="info">
+          <el-form ref="formRef" :model="form" :rules="rules" label-width="110px" style="margin-top:8px">
+            <el-form-item label="Email" prop="email">
+              <el-input v-model="form.email" disabled />
+            </el-form-item>
+            <el-form-item :label="$t('user.displayName')" prop="displayName">
+              <el-input v-model="form.displayName" />
+            </el-form-item>
+            <el-form-item :label="$t('user.nameZh')">
+              <el-input v-model="form.nameZh" />
+            </el-form-item>
+            <el-form-item :label="$t('user.employeeNo')">
+              <el-input v-model="form.employeeNo" />
+            </el-form-item>
+            <el-form-item :label="$t('common.status')">
+              <el-select v-model="form.status" style="width:100%">
+                <el-option :label="$t('status.pending_activation')" value="pending_activation" />
+                <el-option :label="$t('status.active')"             value="active" />
+                <el-option :label="$t('status.suspended')"          value="suspended" />
+                <el-option :label="$t('status.resigned')"           value="resigned" />
+              </el-select>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="審批職能" name="assignments">
+          <UserApprovalAssignmentPanel v-if="editingUser" :user-id="editingUser.id" style="margin-top:8px" />
+        </el-tab-pane>
+      </el-tabs>
       <template #footer>
         <el-button @click="dialogVisible = false">{{ $t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSave">{{ $t('common.confirm') }}</el-button>
+        <el-button v-if="activeTab === 'info'" type="primary" :loading="saving" @click="handleSave">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -136,6 +143,7 @@ import dayjs from 'dayjs'
 import { usersApi } from '@/api/users.api'
 import { useUiStore } from '@/stores/ui.store'
 import { useTable } from '@/composables/useTable'
+import UserApprovalAssignmentPanel from '@/components/UserApprovalAssignmentPanel.vue'
 import type { User } from '@/types'
 
 const { t } = useI18n()
@@ -150,6 +158,7 @@ const { loading, data, total, pagination, fetch, handlePageChange, handleSizeCha
 const dialogVisible = ref(false)
 const editingUser = ref<User | null>(null)
 const saving = ref(false)
+const activeTab = ref('info')
 const formRef = ref<FormInstance>()
 const form = reactive({ email: '', displayName: '', nameZh: '', employeeNo: '', status: 'active' })
 
@@ -169,6 +178,7 @@ function onSearch() {
 
 function openEdit(user: User) {
   editingUser.value = user
+  activeTab.value = 'info'
   Object.assign(form, {
     email: user.email,
     displayName: user.displayName,

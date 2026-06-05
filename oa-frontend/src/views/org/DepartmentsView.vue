@@ -38,32 +38,39 @@
       <el-empty v-else-if="!selectedCompanyId" description="請先選擇公司" />
     </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="editing ? '編輯部門' : '新增部門'" width="480px">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
-        <el-form-item label="上級部門">
-          <el-tree-select
-            v-model="form.parentDepartmentId"
-            :data="tree"
-            node-key="id"
-            :props="{ label: 'name', children: 'children' }"
-            clearable
-            style="width: 100%"
-            placeholder="無（頂層部門）"
-          />
-        </el-form-item>
-        <el-form-item label="代碼" prop="code">
-          <el-input v-model="form.code" />
-        </el-form-item>
-        <el-form-item label="部門名稱" prop="name">
-          <el-input v-model="form.name" />
-        </el-form-item>
-        <el-form-item label="狀態">
-          <el-switch v-model="form.isActive" active-text="啟用" inactive-text="停用" />
-        </el-form-item>
-      </el-form>
+    <el-dialog v-model="dialogVisible" :title="editing ? '編輯部門' : '新增部門'" width="620px">
+      <el-tabs v-model="activeTab">
+        <el-tab-pane label="基本資訊" name="info">
+          <el-form ref="formRef" :model="form" :rules="rules" label-width="120px" style="margin-top:8px">
+            <el-form-item label="上級部門">
+              <el-tree-select
+                v-model="form.parentDepartmentId"
+                :data="tree"
+                node-key="id"
+                :props="{ label: 'name', children: 'children' }"
+                clearable
+                style="width: 100%"
+                placeholder="無（頂層部門）"
+              />
+            </el-form-item>
+            <el-form-item label="代碼" prop="code">
+              <el-input v-model="form.code" />
+            </el-form-item>
+            <el-form-item label="部門名稱" prop="name">
+              <el-input v-model="form.name" />
+            </el-form-item>
+            <el-form-item label="狀態">
+              <el-switch v-model="form.isActive" active-text="啟用" inactive-text="停用" />
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane v-if="editing" label="審批職能" name="assignments">
+          <ApprovalAssignmentPanel scope-type="department" :scope-id="editing.id" style="margin-top:8px" />
+        </el-tab-pane>
+      </el-tabs>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSave">確定</el-button>
+        <el-button v-if="activeTab === 'info'" type="primary" :loading="saving" @click="handleSave">確定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -75,6 +82,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { departmentsApi, companiesApi } from '@/api/organizations.api'
 import { useUiStore } from '@/stores/ui.store'
+import ApprovalAssignmentPanel from '@/components/ApprovalAssignmentPanel.vue'
 import type { Department, Company } from '@/types'
 
 const ui = useUiStore()
@@ -85,6 +93,7 @@ const selectedCompanyId = ref('')
 const dialogVisible = ref(false)
 const editing = ref<Department | null>(null)
 const saving = ref(false)
+const activeTab = ref('info')
 const formRef = ref<FormInstance>()
 const form = reactive({ companyId: '', parentDepartmentId: '', code: '', name: '', isActive: true })
 
@@ -110,18 +119,21 @@ async function loadTree() {
 
 function openCreate() {
   editing.value = null
+  activeTab.value = 'info'
   Object.assign(form, { companyId: selectedCompanyId.value, parentDepartmentId: '', code: '', name: '', isActive: true })
   dialogVisible.value = true
 }
 
 function openCreateChild(parent: Department) {
   editing.value = null
+  activeTab.value = 'info'
   Object.assign(form, { companyId: selectedCompanyId.value, parentDepartmentId: parent.id, code: '', name: '', isActive: true })
   dialogVisible.value = true
 }
 
 function openEdit(dept: Department) {
   editing.value = dept
+  activeTab.value = 'info'
   Object.assign(form, { companyId: selectedCompanyId.value, parentDepartmentId: dept.parentDepartmentId ?? '', code: dept.code, name: dept.name, isActive: dept.isActive })
   dialogVisible.value = true
 }

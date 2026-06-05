@@ -26,31 +26,19 @@ export const approvalsApi = {
   replaceSteps: (id: string, steps: StepPayload[]) =>
     client.put(`/api/approvals/templates/${id}/steps`, { steps }).then(r => r.data.data),
 
-  // ── 審批群組 ──────────────────────────────────────────────────
-  getGroups: (params?: { roleCode?: string; page?: number; limit?: number }) =>
-    client.get('/api/approvals/groups', { params }).then(r => r.data.data),
-  getGroup: (id: string) =>
-    client.get(`/api/approvals/groups/${id}`).then(r => r.data.data),
-  createGroup: (dto: { name: string; roleCode: string; mode?: string; description?: string }) =>
-    client.post('/api/approvals/groups', dto).then(r => r.data.data),
-  updateGroup: (id: string, dto: Partial<{ name: string; mode: string; description: string; isActive: boolean }>) =>
-    client.patch(`/api/approvals/groups/${id}`, dto).then(r => r.data.data),
-
-  // 成員
-  addGroupMember: (groupId: string, dto: { userId: string; memberType?: string; startedAt?: string; endedAt?: string }) =>
-    client.post(`/api/approvals/groups/${groupId}/members`, dto).then(r => r.data.data),
-  removeGroupMember: (memberId: string) =>
-    client.delete(`/api/approvals/group-members/${memberId}`).then(r => r.data.data),
-
-  // 服務範圍
-  addGroupScope: (groupId: string, dto: { scopeType: string; scopeId?: string; formType?: string }) =>
-    client.post(`/api/approvals/groups/${groupId}/scopes`, dto).then(r => r.data.data),
-  removeGroupScope: (scopeId: string) =>
-    client.delete(`/api/approvals/group-scopes/${scopeId}`).then(r => r.data.data),
+  // ── 審批對應關聯表 ────────────────────────────────────────────
+  listAssignments: (params?: { scopeType?: string; scopeId?: string | null; roleCode?: string; userId?: string; page?: number; limit?: number }) =>
+    client.get('/api/approvals/assignments', { params }).then(r => r.data.data),
+  addAssignment: (dto: { scopeType: string; scopeId?: string | null; roleCode: string; userId: string }) =>
+    client.post('/api/approvals/assignments', dto).then(r => r.data.data),
+  removeAssignment: (id: string) =>
+    client.delete(`/api/approvals/assignments/${id}`).then(r => r.data.data),
+  setDefaultAssignment: (id: string) =>
+    client.patch(`/api/approvals/assignments/${id}/default`).then(r => r.data.data),
 
   // 解析與驗證
   resolveGroup: (roleCode: string, params: { groupType: string; companyId?: string; regionId?: string; businessUnitId?: string; projectId?: string; departmentId?: string; formType?: string }) =>
-    client.get(`/api/approvals/groups/resolve/${roleCode}`, { params }).then(r => r.data.data),
+    client.get(`/api/approvals/resolve/${roleCode}`, { params }).then(r => r.data.data),
   validateForm: (dto: { formType: string; amount?: number; companyId?: string; regionId?: string; businessUnitId?: string; projectId?: string; applicantId?: string }) =>
     client.post('/api/approvals/validate-form', dto).then(r => r.data.data),
 }
@@ -74,13 +62,6 @@ export interface StepPayload {
   isRequired: boolean
   allowDynamicAdding: boolean
   approvers: ApproverConfig[]
-}
-
-export interface ApprovalGroupDto {
-  name: string
-  roleCode: string
-  mode?: 'primary' | 'any'
-  description?: string
 }
 
 export const auditLogsApi = {

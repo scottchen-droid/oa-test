@@ -41,35 +41,42 @@
       </el-table>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="editing ? '編輯項目' : '新增項目'" width="520px">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-        <el-form-item label="代碼" prop="code">
-          <el-input v-model="form.code" :disabled="!!editing" placeholder="唯一識別代碼" />
-        </el-form-item>
-        <el-form-item label="項目名稱" prop="name">
-          <el-input v-model="form.name" />
-        </el-form-item>
-        <el-form-item label="業務單位">
-          <el-select v-model="form.businessUnitId" clearable placeholder="選擇業務單位（可選）" style="width: 100%">
-            <el-option v-for="bu in businessUnits" :key="bu.id" :label="bu.name" :value="bu.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="3" />
-        </el-form-item>
-        <el-form-item label="開始日期">
-          <el-date-picker v-model="form.startDate" type="date" value-format="YYYY-MM-DD" placeholder="選擇開始日期" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="結束日期">
-          <el-date-picker v-model="form.endDate" type="date" value-format="YYYY-MM-DD" placeholder="選擇結束日期" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="狀態">
-          <el-switch v-model="form.isActive" active-text="啟用" inactive-text="停用" />
-        </el-form-item>
-      </el-form>
+    <el-dialog v-model="dialogVisible" :title="editing ? '編輯項目' : '新增項目'" width="620px">
+      <el-tabs v-model="activeTab">
+        <el-tab-pane label="基本資訊" name="info">
+          <el-form ref="formRef" :model="form" :rules="rules" label-width="100px" style="margin-top:8px">
+            <el-form-item label="代碼" prop="code">
+              <el-input v-model="form.code" :disabled="!!editing" placeholder="唯一識別代碼" />
+            </el-form-item>
+            <el-form-item label="項目名稱" prop="name">
+              <el-input v-model="form.name" />
+            </el-form-item>
+            <el-form-item label="業務單位">
+              <el-select v-model="form.businessUnitId" clearable placeholder="選擇業務單位（可選）" style="width: 100%">
+                <el-option v-for="bu in businessUnits" :key="bu.id" :label="bu.name" :value="bu.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="描述">
+              <el-input v-model="form.description" type="textarea" :rows="3" />
+            </el-form-item>
+            <el-form-item label="開始日期">
+              <el-date-picker v-model="form.startDate" type="date" value-format="YYYY-MM-DD" placeholder="選擇開始日期" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="結束日期">
+              <el-date-picker v-model="form.endDate" type="date" value-format="YYYY-MM-DD" placeholder="選擇結束日期" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="狀態">
+              <el-switch v-model="form.isActive" active-text="啟用" inactive-text="停用" />
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane v-if="editing" label="審批職能" name="assignments">
+          <ApprovalAssignmentPanel scope-type="project" :scope-id="editing.id" style="margin-top:8px" />
+        </el-tab-pane>
+      </el-tabs>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSave">確定</el-button>
+        <el-button v-if="activeTab === 'info'" type="primary" :loading="saving" @click="handleSave">確定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -81,6 +88,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { projectsApi, businessUnitsApi } from '@/api/organizations.api'
 import { useUiStore } from '@/stores/ui.store'
+import ApprovalAssignmentPanel from '@/components/ApprovalAssignmentPanel.vue'
 import type { Project, BusinessUnit } from '@/types'
 
 const ui = useUiStore()
@@ -91,6 +99,7 @@ const buFilter = ref('')
 const dialogVisible = ref(false)
 const editing = ref<Project | null>(null)
 const saving = ref(false)
+const activeTab = ref('info')
 const formRef = ref<FormInstance>()
 
 const form = reactive({
@@ -125,12 +134,14 @@ async function load() {
 
 function openCreate() {
   editing.value = null
+  activeTab.value = 'info'
   Object.assign(form, { code: '', name: '', businessUnitId: '', description: '', startDate: '', endDate: '', isActive: true })
   dialogVisible.value = true
 }
 
 function openEdit(p: Project) {
   editing.value = p
+  activeTab.value = 'info'
   Object.assign(form, {
     code: p.code,
     name: p.name,
