@@ -501,7 +501,90 @@ DELETE /api/exchange-rates/:id                                   停用（軟刪
 
 ---
 
-## 六、系統稽核日誌 `/system/audit-logs`
+## 六、工作單設定
+
+工作單系統的管理端設定，供系統管理員維護資源項目、處理群組與派發規則。
+
+### 6.1 資源項目設定 `/system/resource-items`
+
+**功能：** 管理員維護公司所有需要申請/回收的資源項目。
+
+**資源項目欄位：**
+
+| 欄位 | 說明 |
+|------|------|
+| `code` | 唯一代碼（mattermost、jira、access_card 等） |
+| `name` | 顯示名稱 |
+| `category` | account（帳號類）/ physical（實體/門禁類） |
+| `responsibleUnit` | 負責單位說明 |
+| `availableOnOnboard` | 入職可申請 |
+| `requiredOnOffboard` | 離職必須回收 |
+| `availableOnAdd` | 在職可新增 |
+| `availableOnChange` | 在職可變更 |
+| `requiresAccountFill` | 完成時需回填帳號/卡號/分機 |
+| `isEnabled` | 是否啟用 |
+
+**初始 seed 資料（8 筆）：**
+mattermost / jira / access_card / fingerprint / phone_ext / apple_id / vpn / google_workspace
+
+**API：**
+```
+GET   /api/system/resource-items
+GET   /api/resource-items                        （員工端，只回傳 isEnabled=true）
+POST  /api/system/resource-items
+PATCH /api/system/resource-items/:id
+PATCH /api/system/resource-items/:id/toggle
+```
+
+### 6.2 工作單處理群組 `/system/work-order-groups`
+
+**功能：** 管理員維護工作單處理群組及成員。
+
+**設計原則：** 派發規則指向「群組」而非個人，人員異動時只需調整群組成員，不需修改派發規則。
+
+**範例群組：**
+- 台灣 IT 帳號處理群組
+- 台灣 PMO Jira 處理群組
+- 日本行政門禁處理群組
+- YL 專案 Jira 處理群組
+
+**API：**
+```
+GET    /api/system/work-order-groups
+POST   /api/system/work-order-groups
+PATCH  /api/system/work-order-groups/:id
+PATCH  /api/system/work-order-groups/:id/toggle
+POST   /api/system/work-order-groups/:id/members   { userId, isLeader? }
+DELETE /api/system/work-order-groups/:id/members/:userId
+GET    /api/work-order-groups/my                   （員工端，取得使用者所屬群組）
+```
+
+### 6.3 工作單派發規則 `/system/work-order-dispatch-rules`
+
+**功能：** 管理員設定「哪種資源 + 哪個組織範圍 → 派給哪個處理群組」。
+
+**派發優先順序（數字越高越優先）：**
+1. 指定項目（project）= 5 分
+2. 指定部門（department）= 4 分
+3. 指定事業部（businessUnit）= 3 分
+4. 指定公司（company）= 2 分
+5. 指定地區（region）= 1 分
+6. 全域預設（所有條件為 null）= 0 分
+
+**派發異常處理：** 若找不到匹配的規則，工作單狀態標記為 `dispatch_error`，系統須通知 HR 或管理員手動指派。
+
+**API：**
+```
+GET    /api/system/work-order-dispatch-rules?resourceItemId=
+POST   /api/system/work-order-dispatch-rules
+PATCH  /api/system/work-order-dispatch-rules/:id
+DELETE /api/system/work-order-dispatch-rules/:id
+```
+
+---
+
+## 七、系統稽核日誌 `/system/audit-logs`
+
 
 ### 功能概述
 記錄所有重要操作的稽核軌跡，包含誰在何時對什麼資料做了什麼操作。
@@ -530,7 +613,7 @@ GET  /api/audit-logs/:id
 
 ---
 
-## 七、模塊設定 `/system/module-settings`
+## 八、模塊設定 `/system/module-settings`
 
 ### 功能概述
 啟用/停用各功能模塊，設定模塊相關參數。
@@ -542,7 +625,7 @@ GET  /api/audit-logs/:id
 
 ---
 
-## 八、通知設定 `/system/notifications`
+## 九、通知設定 `/system/notifications`
 
 ### 功能概述
 設定系統通知的發送規則與渠道。
@@ -562,7 +645,7 @@ GET  /api/audit-logs/:id
 
 ---
 
-## 九、系統設定 `/system/settings`
+## 十、系統設定 `/system/settings`
 
 **設定項目**
 - 系統名稱

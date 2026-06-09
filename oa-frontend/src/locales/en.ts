@@ -24,6 +24,8 @@ export default {
     roles: 'Roles & Permissions', orgStructure: 'Org Structure',
     workflows: 'Workflows', formDefinitions: 'Form Settings', auditLogs: 'Audit Logs',
     moduleSettings: 'Module Settings', systemSettings: 'Settings',
+    workOrders: 'Work Orders', myWorkOrders: 'My Work Orders', groupWorkOrders: 'Group Work Orders',
+    resourceItems: 'Resource Items', workOrderGroups: 'Work Order Groups', workOrderDispatchRules: 'Dispatch Rules',
   },
 
   common: {

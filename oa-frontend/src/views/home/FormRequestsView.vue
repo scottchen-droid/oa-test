@@ -169,6 +169,68 @@
           </el-form-item>
         </template>
 
+        <template v-else-if="activeFormDef?.formType === 'personnel_resource_request'">
+          <el-form-item label="申請類型" prop="requestType">
+            <el-select
+              v-model="formData.requestType"
+              style="width:100%"
+              @change="onResourceRequestTypeChange"
+            >
+              <el-option label="入職開通" value="onboard" />
+              <el-option label="在職新增" value="add" />
+              <el-option label="在職變更" value="change" />
+              <el-option label="離職回收" value="offboard" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="申請對象" prop="targetUserId">
+            <el-select
+              v-model="formData.targetUserId"
+              filterable
+              remote
+              :remote-method="searchTargetUsers"
+              :loading="targetUserSearchLoading"
+              placeholder="搜尋員工"
+              style="width:100%"
+              clearable
+            >
+              <el-option
+                v-for="u in targetUserOptions"
+                :key="u.id"
+                :label="`${u.displayName}（${u.employeeNo ?? ''}）`"
+                :value="u.id"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="生效日期" prop="effectiveDate">
+            <el-date-picker
+              v-model="formData.effectiveDate"
+              type="date"
+              value-format="YYYY-MM-DD"
+              style="width:100%"
+              placeholder="請選擇生效日期"
+            />
+          </el-form-item>
+          <el-form-item label="資源項目" prop="resourceItemIds">
+            <div v-if="resourceItemsLoading" class="loading-hint">載入中...</div>
+            <el-checkbox-group v-else v-model="formData.resourceItemIds" style="display:flex;flex-direction:column;gap:6px">
+              <el-checkbox
+                v-for="item in filteredResourceItems"
+                :key="item.id"
+                :value="item.id"
+              >
+                {{ item.name }}
+                <span class="item-code">（{{ item.code }}）</span>
+              </el-checkbox>
+            </el-checkbox-group>
+          </el-form-item>
+          <el-form-item label="申請原因" prop="reason">
+            <el-input v-model="formData.reason" type="textarea" :rows="3" placeholder="請填寫申請原因" />
+          </el-form-item>
+          <el-form-item label="備註">
+            <el-input v-model="formData.remark" type="textarea" :rows="2" placeholder="選填" />
+          </el-form-item>
+        </template>
+
         <!-- 通用佔位（未知表單類型） -->
         <template v-else>
           <el-form-item label="備註" prop="remark">
@@ -212,7 +274,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -222,6 +284,8 @@ import {
 } from '@element-plus/icons-vue'
 import { formDefinitionsApi, type FormDefinition } from '@/api/form-definitions.api'
 import { formsApi } from '@/api/forms.api'
+import { resourceItemsApi, type ResourceItem } from '@/api/resource-items.api'
+import { usersApi } from '@/api/users.api'
 import { useUiStore } from '@/stores/ui.store'
 import { useRouter } from 'vue-router'
 
@@ -274,6 +338,7 @@ const DIALOG_FORM_TYPES = new Set([
   'it_request',
   'headcount_request',
   'resignation',
+  'personnel_resource_request',
 ])
 
 // ─── 狀態 ─────────────────────────────────────────────────────────────────────
@@ -363,10 +428,83 @@ const rulesMap: Record<string, FormRules> = {
     resignDate: [{ required: true, message: '請選擇預計離職日期', trigger: 'change' }],
     reason: [{ required: true, message: '請填寫離職原因', trigger: 'blur' }],
   },
+  personnel_resource_request: {
+    requestType: [{ required: true, message: '請選擇申請類型', trigger: 'change' }],
+    targetUserId: [{ required: true, message: '請選擇申請對象', trigger: 'change' }],
+    effectiveDate: [{ required: true, message: '請選擇生效日期', trigger: 'change' }],
+    reason: [{ required: true, message: '請填寫申請原因', trigger: 'blur' }],
+  },
 }
 
 const activeRules = computed<FormRules>(() =>
   activeFormDef.value ? (rulesMap[activeFormDef.value.formType] ?? {}) : {},
+)
+
+// ─── 人員資源申請（personnel_resource_request）相關狀態 ────────────────────────
+const targetUserSearchLoading = ref(false)
+const targetUserOptions = ref<{ id: string; displayName: string; employeeNo?: string }[]>([])
+const resourceItemsLoading = ref(false)
+const allResourceItems = ref<ResourceItem[]>([])
+
+async function loadResourceItems() {
+  if (allResourceItems.value.length) return
+  resourceItemsLoading.value = true
+  try {
+    allResourceItems.value = await resourceItemsApi.list()
+  } catch {
+    ElMessage.error('載入資源項目失敗')
+  } finally {
+    resourceItemsLoading.value = false
+  }
+}
+
+const filteredResourceItems = computed<ResourceItem[]>(() => {
+  const reqType = formData.value.requestType as string | undefined
+  if (!reqType) return allResourceItems.value
+  return allResourceItems.value.filter(item => {
+    if (reqType === 'onboard') return item.availableOnOnboard
+    if (reqType === 'add') return item.availableOnAdd
+    if (reqType === 'change') return item.availableOnChange
+    return true // offboard: 全部
+  })
+})
+
+function onResourceRequestTypeChange() {
+  // 若為 offboard，自動勾選 requiredOnOffboard=true 的項目
+  const reqType = formData.value.requestType as string | undefined
+  if (reqType === 'offboard') {
+    const required = allResourceItems.value.filter(i => i.requiredOnOffboard).map(i => i.id)
+    formData.value.resourceItemIds = required
+  } else {
+    formData.value.resourceItemIds = []
+  }
+}
+
+async function searchTargetUsers(query: string) {
+  if (!query.trim()) { targetUserOptions.value = []; return }
+  targetUserSearchLoading.value = true
+  try {
+    const result = await usersApi.getAll({ search: query, limit: 20 })
+    targetUserOptions.value = result.items.map(u => ({
+      id: u.id,
+      displayName: u.displayName,
+      employeeNo: u.employeeNo,
+    }))
+  } catch {
+    targetUserOptions.value = []
+  } finally {
+    targetUserSearchLoading.value = false
+  }
+}
+
+// 當 Dialog 開啟且為 personnel_resource_request 時載入資源項目
+watch(
+  () => activeFormDef.value?.formType,
+  (type) => {
+    if (type === 'personnel_resource_request') {
+      loadResourceItems()
+    }
+  },
 )
 
 // ─── 開啟表單 ──────────────────────────────────────────────────────────────────
@@ -389,6 +527,13 @@ function openForm(def: FormDefinition) {
       estimatedAmount: 0,
       estimatedBudget: 0,
       needAccommodation: false,
+      // personnel_resource_request
+      requestType: '',
+      targetUserId: '',
+      effectiveDate: '',
+      resourceItemIds: [] as string[],
+      reason: '',
+      remark: '',
     }
     dialogVisible.value = true
     return
@@ -513,4 +658,8 @@ async function submitForm() {
   grid-column: 1 / -1;
   padding: 40px 0;
 }
+
+.loading-hint { color: #909399; font-size: 13px; }
+
+.item-code { color: #909399; font-size: 12px; }
 </style>

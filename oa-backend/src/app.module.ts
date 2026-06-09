@@ -22,6 +22,10 @@ import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { FormsModule } from './forms/forms.module';
 import { FormDefinitionsModule } from './form-definitions/form-definitions.module';
 import { ExchangeRatesModule } from './exchange-rates/exchange-rates.module';
+import { ResourceItemsModule } from './resource-items/resource-items.module';
+import { WorkOrderGroupsModule } from './work-order-groups/work-order-groups.module';
+import { WorkOrderDispatchRulesModule } from './work-order-dispatch-rules/work-order-dispatch-rules.module';
+import { WorkOrdersModule } from './work-orders/work-orders.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import configuration from './config/configuration';
 
@@ -52,6 +56,10 @@ import configuration from './config/configuration';
     FormsModule,
     FormDefinitionsModule,
     ExchangeRatesModule,
+    ResourceItemsModule,
+    WorkOrderGroupsModule,
+    WorkOrderDispatchRulesModule,
+    WorkOrdersModule,
   ],
   providers: [
     {

@@ -24,6 +24,8 @@ export default {
     roles: '角色与权限', orgStructure: '组织架构',
     workflows: '审批流设定', formDefinitions: '电子表单设置', auditLogs: '稽核日志',
     moduleSettings: '模块设定', systemSettings: '系统设定',
+    workOrders: '工单中心', myWorkOrders: '我的工单', groupWorkOrders: '群组工单',
+    resourceItems: '资源项目设置', workOrderGroups: '处理群组', workOrderDispatchRules: '派发规则',
   },
 
   common: {

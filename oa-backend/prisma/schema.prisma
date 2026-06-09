@@ -33,6 +33,7 @@ model Region {
   employeeCostAllocations EmployeeCostAllocation[]
   payrollCostAllocations  PayrollCostAllocationSnapshot[]
   oaFormRequests          OaFormRequest[]       @relation("OaFormRegion")
+  workOrderDispatchRules  WorkOrderDispatchRule[]
 
   @@map("regions")
 }
@@ -63,6 +64,7 @@ model Company {
   employeeCostAllocations  EmployeeCostAllocation[]
   payrollCostAllocations   PayrollCostAllocationSnapshot[]
   oaFormRequests           OaFormRequest[]       @relation("OaFormCompany")
+  workOrderDispatchRules   WorkOrderDispatchRule[]
 
   @@map("companies")
 }
@@ -92,6 +94,7 @@ model Department {
   employeeCostAllocations EmployeeCostAllocation[]
   payrollCostAllocations  PayrollCostAllocationSnapshot[]
   oaFormRequests          OaFormRequest[] @relation("OaFormDepartment")
+  workOrderDispatchRules  WorkOrderDispatchRule[]
 
   @@map("departments")
 }
@@ -115,6 +118,7 @@ model BusinessUnit {
   employeeCostAllocations EmployeeCostAllocation[]
   payrollCostAllocations  PayrollCostAllocationSnapshot[]
   oaFormRequests          OaFormRequest[]              @relation("OaFormBusinessUnit")
+  workOrderDispatchRules  WorkOrderDispatchRule[]
 
   @@map("business_units")
 }
@@ -142,6 +146,7 @@ model Project {
   employeeCostAllocations EmployeeCostAllocation[]
   payrollCostAllocations  PayrollCostAllocationSnapshot[]
   oaFormRequests          OaFormRequest[]          @relation("OaFormProject")
+  workOrderDispatchRules  WorkOrderDispatchRule[]
 
   @@map("projects")
 }
@@ -272,6 +277,11 @@ model User {
   exchangeRatesCreated    ExchangeRate[]   @relation("ExchangeRateCreator")
   oaFormDrafts            OaFormDraft[]    @relation("OaFormDraftCreator")
   oaFillTemplates         OaFillTemplate[] @relation("OaFillTemplateCreator")
+  workOrderGroupMemberships WorkOrderGroupMember[]
+  workOrderHistories        WorkOrderHistory[]    @relation("WorkOrderHistoryOperator")
+  assignedWorkOrders        WorkOrder[]           @relation("WorkOrderAssignee")
+  personnelResourceTargets  PersonnelResourceRequest[] @relation("PersonnelResourceTarget")
+  employeeResources         EmployeeResource[]
 
   @@map("users")
 }
@@ -1427,6 +1437,7 @@ model OaFormRequest {
   company        Company?      @relation("OaFormCompany", fields: [companyId], references: [id])
   region         Region?       @relation("OaFormRegion", fields: [regionId], references: [id])
   reimbursements ReimbursementRequest[] @relation("BusinessTripReimbursements")
+  personnelResourceRequest PersonnelResourceRequest?
 
   @@index([submitterUserId])
   @@index([status])
@@ -1508,6 +1519,205 @@ model OaFillTemplate {
 
   @@index([creatorUserId])
   @@map("oa_fill_templates")
+}
+
+// ═══════════════════════════════════════════════
+// 人員資源申請 / 工作單系統
+// ═══════════════════════════════════════════════
+
+/// 資源項目定義（Mattermost / Jira / 門禁卡 等）
+model ResourceItem {
+  id                  String   @id @default(uuid()) @db.Uuid
+  code                String   @unique @db.VarChar(50)    // mattermost | jira | access_card | fingerprint | phone | apple_id | vpn | google_workspace 等
+  name                String   @db.VarChar(100)           // 顯示名稱
+  category            String   @db.VarChar(30)            // account | physical
+  responsibleUnit     String?  @db.VarChar(100)           // 負責單位說明
+  availableOnOnboard  Boolean  @default(true)             // 入職可申請
+  requiredOnOffboard  Boolean  @default(false)            // 離職必須回收
+  availableOnAdd      Boolean  @default(true)             // 在職可新增
+  availableOnChange   Boolean  @default(false)            // 在職可變更
+  requiresAccountFill Boolean  @default(false)            // 完成時需回填帳號/卡號等
+  requiresAttachment  Boolean  @default(false)            // 需要附件
+  isEnabled           Boolean  @default(true)
+  sortOrder           Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  requestItems      PersonnelResourceRequestItem[]
+  dispatchRules     WorkOrderDispatchRule[]
+  workOrders        WorkOrder[]
+  employeeResources EmployeeResource[]
+
+  @@map("resource_items")
+}
+
+/// 工作單處理群組（如：台灣 IT 帳號處理群組）
+model WorkOrderGroup {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(300)
+  isEnabled   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members       WorkOrderGroupMember[]
+  dispatchRules WorkOrderDispatchRule[]
+  workOrders    WorkOrder[]
+
+  @@map("work_order_groups")
+}
+
+/// 工作單處理群組成員
+model WorkOrderGroupMember {
+  id       String   @id @default(uuid()) @db.Uuid
+  groupId  String   @db.Uuid
+  userId   String   @db.Uuid
+  isLeader Boolean  @default(false)
+  joinedAt DateTime @default(now())
+
+  group WorkOrderGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@map("work_order_group_members")
+}
+
+/// 工作單派發規則（資源項目 + 組織條件 → 處理群組）
+model WorkOrderDispatchRule {
+  id               String   @id @default(uuid()) @db.Uuid
+  resourceItemId   String   @db.Uuid
+  workOrderGroupId String   @db.Uuid
+  regionId         String?  @db.Uuid
+  companyId        String?  @db.Uuid
+  departmentId     String?  @db.Uuid
+  businessUnitId   String?  @db.Uuid
+  projectId        String?  @db.Uuid
+  priority         Int      @default(0)    // 越高越優先，用於同資源多規則時決定使用哪條
+  isEnabled        Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  resourceItem   ResourceItem   @relation(fields: [resourceItemId], references: [id])
+  workOrderGroup WorkOrderGroup @relation(fields: [workOrderGroupId], references: [id])
+  region         Region?        @relation(fields: [regionId], references: [id])
+  company        Company?       @relation(fields: [companyId], references: [id])
+  department     Department?    @relation(fields: [departmentId], references: [id])
+  businessUnit   BusinessUnit?  @relation(fields: [businessUnitId], references: [id])
+  project        Project?       @relation(fields: [projectId], references: [id])
+
+  @@index([resourceItemId])
+  @@map("work_order_dispatch_rules")
+}
+
+/// 人員資源申請主單（關聯到 OaFormRequest，審批通過後產生工作單）
+model PersonnelResourceRequest {
+  id            String   @id @default(uuid()) @db.Uuid
+  formRequestId String   @unique @db.Uuid    // → OaFormRequest（1:1）
+  requestType   String   @db.VarChar(30)     // onboard | add | change | offboard
+  targetUserId  String   @db.Uuid            // 申請對象員工 → User
+  effectiveDate DateTime @db.Date             // 到職日/離職日/生效日
+  reason        String?  @db.VarChar(500)    // 申請原因
+  remark        String?  @db.VarChar(500)    // 備註
+  status        String   @default("draft") @db.VarChar(30)
+  // draft | pending | approved | rejected | processing | completed | closed | canceled
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  formRequest OaFormRequest @relation(fields: [formRequestId], references: [id])
+  targetUser  User          @relation("PersonnelResourceTarget", fields: [targetUserId], references: [id])
+  items       PersonnelResourceRequestItem[]
+  workOrders  WorkOrder[]
+
+  @@index([targetUserId])
+  @@index([status])
+  @@map("personnel_resource_requests")
+}
+
+/// 人員資源申請項目（每張申請單勾選的資源）
+model PersonnelResourceRequestItem {
+  id             String   @id @default(uuid()) @db.Uuid
+  requestId      String   @db.Uuid
+  resourceItemId String   @db.Uuid
+  existingValue  String?  @db.VarChar(200)  // 離職時：已綁定的值（帳號/卡號等）
+  createdAt      DateTime @default(now())
+
+  request      PersonnelResourceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  resourceItem ResourceItem             @relation(fields: [resourceItemId], references: [id])
+  workOrder    WorkOrder?
+
+  @@unique([requestId, resourceItemId])
+  @@index([requestId])
+  @@map("personnel_resource_request_items")
+}
+
+/// 工作單（審批通過後由系統自動產生，一個資源項目對應一張工作單）
+model WorkOrder {
+  id               String    @id @default(uuid()) @db.Uuid
+  requestId        String    @db.Uuid
+  requestItemId    String    @unique @db.Uuid
+  resourceItemId   String    @db.Uuid
+  workOrderGroupId String?   @db.Uuid    // null = 派發異常
+  assignedUserId   String?   @db.Uuid
+  status           String    @default("pending_dispatch") @db.VarChar(30)
+  // pending_dispatch | dispatch_error | pending | processing | completed | failed | returned | canceled
+  dispatchErrorMsg String?   @db.VarChar(500)
+  resultData       Json?                   // 回填結果（帳號/卡號/分機等，JSONB）
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  request        PersonnelResourceRequest     @relation(fields: [requestId], references: [id])
+  requestItem    PersonnelResourceRequestItem @relation(fields: [requestItemId], references: [id])
+  resourceItem   ResourceItem                 @relation(fields: [resourceItemId], references: [id])
+  workOrderGroup WorkOrderGroup?              @relation(fields: [workOrderGroupId], references: [id])
+  assignedUser   User?                        @relation("WorkOrderAssignee", fields: [assignedUserId], references: [id])
+  histories      WorkOrderHistory[]
+
+  @@index([requestId])
+  @@index([workOrderGroupId])
+  @@index([status])
+  @@map("work_orders")
+}
+
+/// 工作單操作歷史
+model WorkOrderHistory {
+  id             String   @id @default(uuid()) @db.Uuid
+  workOrderId    String   @db.Uuid
+  operatorUserId String   @db.Uuid
+  action         String   @db.VarChar(50)  // dispatch | start | fill | complete | fail | return | reassign | note
+  fromStatus     String?  @db.VarChar(30)
+  toStatus       String?  @db.VarChar(30)
+  fromGroupId    String?  @db.Uuid
+  toGroupId      String?  @db.Uuid
+  content        String?  @db.VarChar(500)
+  createdAt      DateTime @default(now())
+
+  workOrder    WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  operatorUser User      @relation("WorkOrderHistoryOperator", fields: [operatorUserId], references: [id])
+
+  @@index([workOrderId])
+  @@map("work_order_histories")
+}
+
+/// 員工已綁定資源（工作單完成後寫入，離職時自動帶出）
+model EmployeeResource {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  resourceItemId String   @db.Uuid
+  value          String?  @db.VarChar(200)  // 帳號/卡號/分機等主要值
+  extraData      Json?                       // 其他欄位（email、是否啟用等）
+  isActive       Boolean  @default(true)     // false = 離職後回收
+  workOrderId    String?  @db.Uuid
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id])
+  resourceItem ResourceItem @relation(fields: [resourceItemId], references: [id])
+
+  @@unique([userId, resourceItemId])
+  @@index([userId])
+  @@map("employee_resources")
 }
 
 /// 系統操作稽核日誌（所有重要操作皆記錄）

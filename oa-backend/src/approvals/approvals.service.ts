@@ -1,9 +1,14 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { WorkOrdersService } from '../work-orders/work-orders.service';
 
 @Injectable()
 export class ApprovalsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => WorkOrdersService))
+    private readonly workOrdersService: WorkOrdersService,
+  ) {}
 
   async findPending(params: { userId: string; formType?: string; page?: number; limit?: number }) {
     const { userId, formType, page = 1, limit = 20 } = params;
@@ -143,7 +148,7 @@ export class ApprovalsService {
   }
 
   async approve(id: string, dto: { approverId: string; comment?: string }) {
-    await this.findInstance(id);
+    const instance = await this.findInstance(id);
 
     const step = await this.prisma.approvalStep.findFirst({
       where: { approvalInstanceId: id, status: 'pending' },
@@ -167,6 +172,32 @@ export class ApprovalsService {
         },
       }),
     ]);
+
+    // Check if all steps are now approved
+    const remainingSteps = await this.prisma.approvalStep.count({
+      where: { approvalInstanceId: id, status: 'pending' },
+    });
+
+    if (remainingSteps === 0) {
+      await this.prisma.approvalInstance.update({
+        where: { id },
+        data: { status: 'approved', completedAt: new Date() },
+      });
+
+      // Trigger post-approval logic based on formType
+      if (instance.formType === 'personnel_resource_request') {
+        const formRequest = await this.prisma.oaFormRequest.findFirst({
+          where: { approvalInstanceId: id },
+          include: { personnelResourceRequest: true },
+        });
+
+        if (formRequest?.personnelResourceRequest) {
+          await this.workOrdersService.generateFromPersonnelRequest(
+            formRequest.personnelResourceRequest.id,
+          );
+        }
+      }
+    }
 
     return { message: 'Approved' };
   }

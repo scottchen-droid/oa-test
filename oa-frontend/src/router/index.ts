@@ -116,6 +116,20 @@ const router = createRouter({
           meta: { title: '登入記錄' },
         },
 
+        // 工作單中心（員工）
+        {
+          path: 'home/work-orders',
+          name: 'MyWorkOrders',
+          component: () => import('@/views/home/MyWorkOrdersView.vue'),
+          meta: { title: '我的工作單' },
+        },
+        {
+          path: 'home/work-orders/group',
+          name: 'GroupWorkOrders',
+          component: () => import('@/views/home/GroupWorkOrdersView.vue'),
+          meta: { title: '群組工作單' },
+        },
+
         // 主管（審批）
         {
           path: 'home/manager/approvals',
@@ -316,6 +330,24 @@ const router = createRouter({
           name: 'FormDefinitions',
           component: () => import('@/views/admin/FormDefinitionsView.vue'),
           meta: { title: '電子表單設定', module: 'system' },
+        },
+        {
+          path: 'system/resource-items',
+          name: 'ResourceItems',
+          component: () => import('@/views/admin/ResourceItemsView.vue'),
+          meta: { title: '資源項目設定', module: 'system' },
+        },
+        {
+          path: 'system/work-order-groups',
+          name: 'WorkOrderGroups',
+          component: () => import('@/views/admin/WorkOrderGroupsView.vue'),
+          meta: { title: '工作單處理群組', module: 'system' },
+        },
+        {
+          path: 'system/work-order-dispatch-rules',
+          name: 'WorkOrderDispatchRules',
+          component: () => import('@/views/admin/WorkOrderDispatchRulesView.vue'),
+          meta: { title: '工作單派發規則', module: 'system' },
         },
         {
           path: 'system/audit-logs',

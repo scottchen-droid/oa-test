@@ -46,6 +46,16 @@
           <el-menu-item index="/home/forms/fill-templates">{{ $t('nav.myFillTemplates') }}</el-menu-item>
         </el-sub-menu>
 
+        <!-- 工作單中心 -->
+        <el-sub-menu index="work-orders">
+          <template #title>
+            <el-icon><List /></el-icon>
+            <span>{{ $t('nav.workOrders') }}</span>
+          </template>
+          <el-menu-item index="/home/work-orders">{{ $t('nav.myWorkOrders') }}</el-menu-item>
+          <el-menu-item index="/home/work-orders/group">{{ $t('nav.groupWorkOrders') }}</el-menu-item>
+        </el-sub-menu>
+
         <!-- 主管（僅管理者可見） -->
         <el-sub-menu v-if="auth.isManager" index="manager">
           <template #title>
@@ -124,6 +134,11 @@
             <el-menu-item index="/system/audit-logs">{{ $t('nav.auditLogs') }}</el-menu-item>
             <el-menu-item index="/system/module-settings">{{ $t('nav.moduleSettings') }}</el-menu-item>
             <el-menu-item index="/system/settings">{{ $t('nav.systemSettings') }}</el-menu-item>
+          </el-menu-item-group>
+          <el-menu-item-group :title="'工作單設定'">
+            <el-menu-item index="/system/resource-items">{{ $t('nav.resourceItems') }}</el-menu-item>
+            <el-menu-item index="/system/work-order-groups">{{ $t('nav.workOrderGroups') }}</el-menu-item>
+            <el-menu-item index="/system/work-order-dispatch-rules">{{ $t('nav.workOrderDispatchRules') }}</el-menu-item>
           </el-menu-item-group>
         </el-sub-menu>
       </el-menu>
@@ -206,7 +221,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
 import {
   Monitor, House, Clock, Document, Avatar, InfoFilled,
-  UserFilled, Wallet, Files, Setting, Fold, Expand, ArrowDown, Flag,
+  UserFilled, Wallet, Files, Setting, Fold, Expand, ArrowDown, Flag, List,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useUiStore } from '@/stores/ui.store'

@@ -1,7 +1,11 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-const VALID_FORM_TYPES = ['purchase_request', 'business_trip', 'asset_request', 'meal_allowance', 'it_request', 'headcount_request', 'resignation', 'expense_reimbursement'];
+const VALID_FORM_TYPES = [
+  'purchase_request', 'business_trip', 'asset_request', 'meal_allowance',
+  'it_request', 'headcount_request', 'resignation', 'expense_reimbursement',
+  'personnel_resource_request',
+];
 
 @Injectable()
 export class FormsService {
@@ -133,7 +137,69 @@ export class FormsService {
       this.prisma.oaFormDraft.delete({ where: { id } }),
     ]);
 
+    if (draft.formType === 'personnel_resource_request') {
+      await this.handlePersonnelRequestSubmit(request.id, draft.content as Record<string, unknown>);
+    }
+
     return request;
+  }
+
+  async handlePersonnelRequestSubmit(
+    formRequestId: string,
+    content: Record<string, unknown>,
+  ) {
+    const {
+      requestType,
+      targetUserId,
+      effectiveDate,
+      reason,
+      remark,
+      resourceItemIds,
+    } = content as {
+      requestType: string;
+      targetUserId: string;
+      effectiveDate: string;
+      reason?: string;
+      remark?: string;
+      resourceItemIds: string[];
+    };
+
+    await this.prisma.$transaction(async (tx) => {
+      const personnelRequest = await tx.personnelResourceRequest.create({
+        data: {
+          formRequestId,
+          requestType,
+          targetUserId,
+          effectiveDate: new Date(effectiveDate),
+          reason,
+          remark,
+          status: 'pending',
+        },
+      });
+
+      for (const resourceItemId of resourceItemIds ?? []) {
+        await tx.personnelResourceRequestItem.create({
+          data: {
+            requestId: personnelRequest.id,
+            resourceItemId,
+          },
+        });
+      }
+    });
+  }
+
+  async handlePersonnelRequestApproved(approvalInstanceId: string) {
+    const formRequest = await this.prisma.oaFormRequest.findFirst({
+      where: { approvalInstanceId },
+      include: { personnelResourceRequest: true },
+    });
+
+    if (!formRequest?.personnelResourceRequest) return;
+
+    await this.prisma.personnelResourceRequest.update({
+      where: { id: formRequest.personnelResourceRequest.id },
+      data: { status: 'approved' },
+    });
   }
 
   // ─── 填寫模板 ────────────────────────────────────────

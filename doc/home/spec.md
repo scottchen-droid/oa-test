@@ -310,7 +310,66 @@ POST   /api/forms/fill-templates/:id/use
 
 ---
 
-## 五、登入記錄 `/home/account/login-logs`
+## 五、工作單中心
+
+工作單中心讓各負責單位（IT、行政、HR 等）接收並處理由「人員資源申請單」審批通過後自動產生的任務。
+
+> 核心邏輯：電子表單負責申請與審批，工作單負責後續執行與結果回填。
+
+### 5.1 我的工作單 `/home/work-orders`
+
+**功能：**
+- 顯示目前登入者需要處理的工作單（assignedUserId = 我，或所屬群組有派發的工作單）
+- Tab 篩選狀態：全部 / 待處理 / 處理中 / 已完成 / 失敗 / 退回
+- 列表欄位：資源項目、申請對象、申請類型、狀態、群組、建立時間、操作
+
+**工作單狀態：**
+
+| 代碼 | 顯示 | 說明 |
+|------|------|------|
+| `pending_dispatch` | 待派發 | 審批通過，等待系統派發 |
+| `dispatch_error` | 派發異常 | 找不到對應派發規則 |
+| `pending` | 待處理 | 已派發，等待處理人接手 |
+| `processing` | 處理中 | 處理人已開始處理 |
+| `completed` | 已完成 | 處理完成，結果已回填 |
+| `failed` | 無法處理 | 標記為無法完成 |
+| `returned` | 已退回 | 退回給申請人或 HR |
+| `canceled` | 已取消 | 主單取消後連動 |
+
+**操作按鈕（依狀態）：**
+- `pending` → 「開始處理」
+- `processing` → 「完成」「標記失敗」「退回」
+- 任何狀態 → 「補充備註」
+- 「完成」時若 `requiresAccountFill=true`：顯示回填表單（帳號/卡號/分機等）
+
+**API：**
+```
+GET  /api/work-orders/mine?status=&page=1&limit=20
+POST /api/work-orders/:id/start
+POST /api/work-orders/:id/complete  { resultData? }
+POST /api/work-orders/:id/fail      { reason }
+POST /api/work-orders/:id/return    { reason }
+POST /api/work-orders/:id/reassign  { newGroupId, reason }
+POST /api/work-orders/:id/note      { content }
+```
+
+### 5.2 群組工作單 `/home/work-orders/group`
+
+**功能：**
+- 顯示登入者所屬工作單處理群組的所有工作單
+- 頂部 Tab 依群組切換（若使用者加入多個群組）
+- 若未加入任何群組，顯示提示訊息
+- 操作與「我的工作單」相同
+
+**API：**
+```
+GET /api/work-orders/group?groupId=&status=&page=1
+GET /api/work-order-groups/my        → 取得使用者所屬群組列表
+```
+
+---
+
+## 六、登入記錄 `/home/account/login-logs`
 
 - 顯示本帳號最近 N 筆登入記錄
 - 欄位：時間、IP、裝置/瀏覽器、地點（如可推斷）、狀態（成功/失敗）
@@ -322,7 +381,7 @@ GET /api/auth/login-logs?page=1&limit=20
 
 ---
 
-## 六、主管區塊（需 `module.home_manager.access`）
+## 七、主管區塊（需 `module.home_manager.access`）
 
 主管區塊在側欄以「主管」入口顯示，僅對具備 `module.home_manager.access` 權限的使用者可見。
 
@@ -360,7 +419,7 @@ GET  /api/approvals/:id          (詳情)
 
 ---
 
-## 七、資訊中心
+## 八、資訊中心
 
 ### 7.1 公告 `/home/info/announcements`
 
