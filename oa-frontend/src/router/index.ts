@@ -75,13 +75,25 @@ const router = createRouter({
           path: 'home/forms/requests',
           name: 'FormRequests',
           component: () => import('@/views/home/FormRequestsView.vue'),
-          meta: { title: '申請' },
+          meta: { title: '發起申請' },
         },
         {
           path: 'home/forms/approvals',
           name: 'MyFormApprovals',
           component: () => import('@/views/home/MyFormApprovalsView.vue'),
-          meta: { title: '簽核' },
+          meta: { title: '我的申請' },
+        },
+        {
+          path: 'home/forms/drafts',
+          name: 'MyFormDrafts',
+          component: () => import('@/views/home/MyDraftsView.vue'),
+          meta: { title: '我的草稿' },
+        },
+        {
+          path: 'home/forms/fill-templates',
+          name: 'MyFillTemplates',
+          component: () => import('@/views/home/MyFillTemplatesView.vue'),
+          meta: { title: '我的填寫模板' },
         },
         {
           path: 'home/forms/reimbursement/new',
@@ -298,6 +310,12 @@ const router = createRouter({
           name: 'Workflows',
           component: () => import('@/views/admin/WorkflowsView.vue'),
           meta: { title: '審批流設定', module: 'system' },
+        },
+        {
+          path: 'system/form-definitions',
+          name: 'FormDefinitions',
+          component: () => import('@/views/admin/FormDefinitionsView.vue'),
+          meta: { title: '電子表單設定', module: 'system' },
         },
         {
           path: 'system/audit-logs',

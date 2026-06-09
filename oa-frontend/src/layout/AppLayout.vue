@@ -40,8 +40,10 @@
             <el-icon><Document /></el-icon>
             <span>{{ $t('nav.forms') }}</span>
           </template>
-          <el-menu-item index="/home/forms/requests">{{ $t('nav.apply') }}</el-menu-item>
-          <el-menu-item index="/home/forms/approvals">{{ $t('nav.approve') }}</el-menu-item>
+          <el-menu-item index="/home/forms/requests">{{ $t('nav.initiateApply') }}</el-menu-item>
+          <el-menu-item index="/home/forms/approvals">{{ $t('nav.myRequests') }}</el-menu-item>
+          <el-menu-item index="/home/forms/drafts">{{ $t('nav.myDrafts') }}</el-menu-item>
+          <el-menu-item index="/home/forms/fill-templates">{{ $t('nav.myFillTemplates') }}</el-menu-item>
         </el-sub-menu>
 
         <!-- 主管（僅管理者可見） -->
@@ -118,6 +120,7 @@
           <el-menu-item index="/system/org">{{ $t('nav.orgStructure') }}</el-menu-item>
           <el-menu-item-group :title="$t('nav.systemSettings')">
             <el-menu-item index="/system/workflows">{{ $t('nav.workflows') }}</el-menu-item>
+            <el-menu-item index="/system/form-definitions">{{ $t('nav.formDefinitions') }}</el-menu-item>
             <el-menu-item index="/system/audit-logs">{{ $t('nav.auditLogs') }}</el-menu-item>
             <el-menu-item index="/system/module-settings">{{ $t('nav.moduleSettings') }}</el-menu-item>
             <el-menu-item index="/system/settings">{{ $t('nav.systemSettings') }}</el-menu-item>

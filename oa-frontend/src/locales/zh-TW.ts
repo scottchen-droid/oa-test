@@ -6,6 +6,8 @@ export default {
     attendance: '考勤管理', clock: '打卡', records: '出勤紀錄',
     leaves: '假期申請', overtime: '加班申請',
     forms: '電子表單', apply: '申請', approve: '簽核',
+    initiateApply: '發起申請', myRequests: '我的申請',
+    myDrafts: '我的草稿', myFillTemplates: '我的填寫模板',
     manager: '主管',
     infoCenter: '資訊中心', announcements: '公告', orgChart: '組織架構',
     systemMessages: '系統訊息', loginLogs: '登入記錄',
@@ -20,7 +22,7 @@ export default {
     visitors: '訪客管理', meetingRooms: '會議室管理',
     systemModule: '系統管理員', users: '帳號管理',
     roles: '角色與權限', orgStructure: '組織架構',
-    workflows: '審批流設定', auditLogs: '稽核日誌',
+    workflows: '審批流設定', formDefinitions: '電子表單設定', auditLogs: '稽核日誌',
     moduleSettings: '模塊設定', systemSettings: '系統設定',
   },
 

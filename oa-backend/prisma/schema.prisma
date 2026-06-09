@@ -270,6 +270,8 @@ model User {
   approvalTemplateStepApprovers ApprovalTemplateStepApprover[]
   oaFormRequests          OaFormRequest[]  @relation("OaFormSubmitter")
   exchangeRatesCreated    ExchangeRate[]   @relation("ExchangeRateCreator")
+  oaFormDrafts            OaFormDraft[]    @relation("OaFormDraftCreator")
+  oaFillTemplates         OaFillTemplate[] @relation("OaFillTemplateCreator")
 
   @@map("users")
 }
@@ -1431,6 +1433,81 @@ model OaFormRequest {
   @@index([businessUnitId])
   @@index([projectId])
   @@map("oa_form_requests")
+}
+
+/// 電子表單定義（表單類型的中央登錄，包含分類與啟用設定）
+model OaFormDefinition {
+  id               String   @id @default(uuid()) @db.Uuid
+  formType         String   @unique @db.VarChar(100)     // 表單類型代碼，唯一，如 purchase_request
+  name             String   @db.VarChar(255)             // 顯示名稱
+  category         String   @db.VarChar(50)              // 分類：business | contract | finance | administration | pmo | hr
+  description      String?  @db.VarChar(500)             // 說明
+  icon             String?  @db.VarChar(50)              // 圖示名稱（element-plus icon）
+  iconColor        String?  @db.VarChar(20)              // 圖示顏色
+  isEnabled        Boolean  @default(true)               // 是否啟用
+  allowDraft       Boolean  @default(true)               // 允許儲存草稿
+  allowFillTemplate Boolean @default(true)               // 允許另存為填寫模板
+  allowCopyHistory Boolean  @default(true)               // 允許從歷史申請複製
+  sortOrder        Int      @default(0)                  // 排序（同分類內，數字越小越前）
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  permissions OaFormPermission[]
+
+  @@map("oa_form_definitions")
+}
+
+/// 電子表單申請權限（控制誰可以看到並申請某個表單）
+model OaFormPermission {
+  id               String   @id @default(uuid()) @db.Uuid
+  formDefinitionId String   @db.Uuid                    // → OaFormDefinition
+  targetType       String   @db.VarChar(20)             // all | company | department | role | user
+  targetId         String?  @db.Uuid                    // 對應 company/dept/role/user 的 UUID；all 時為 null
+
+  createdAt DateTime @default(now())
+
+  formDefinition OaFormDefinition @relation(fields: [formDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([formDefinitionId, targetType, targetId])
+  @@index([formDefinitionId])
+  @@map("oa_form_permissions")
+}
+
+/// 電子表單草稿（尚未送出的申請，不產生審批流程）
+model OaFormDraft {
+  id            String   @id @default(uuid()) @db.Uuid
+  formType      String   @db.VarChar(100)              // 表單類型，同 OaFormRequest.formType
+  creatorUserId String   @db.Uuid
+  title         String?  @db.VarChar(255)              // 草稿標題 / 申請主旨
+  content       Json     @default("{}")                // 填寫中的表單欄位（JSONB）
+  lastSavedAt   DateTime @default(now()) @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  creator User @relation("OaFormDraftCreator", fields: [creatorUserId], references: [id])
+
+  @@index([creatorUserId])
+  @@map("oa_form_drafts")
+}
+
+/// 電子表單填寫模板（使用者常用填寫內容，不保存審批線）
+model OaFillTemplate {
+  id            String    @id @default(uuid()) @db.Uuid
+  formType      String    @db.VarChar(100)             // 適用的表單類型
+  creatorUserId String    @db.Uuid
+  name          String    @db.VarChar(255)             // 模板名稱
+  description   String?   @db.VarChar(1000)           // 模板說明
+  content       Json      @default("{}")               // 可重複使用的欄位內容（JSONB，不含審批線）
+  isFavorite    Boolean   @default(false)              // 是否設為常用
+  isEnabled     Boolean   @default(true)               // 是否啟用
+  lastUsedAt    DateTime?                              // 最近使用時間
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  creator User @relation("OaFillTemplateCreator", fields: [creatorUserId], references: [id])
+
+  @@index([creatorUserId])
+  @@map("oa_fill_templates")
 }
 
 /// 系統操作稽核日誌（所有重要操作皆記錄）

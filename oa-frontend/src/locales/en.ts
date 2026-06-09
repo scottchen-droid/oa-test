@@ -6,6 +6,8 @@ export default {
     attendance: 'Attendance', clock: 'Clock In/Out', records: 'Attendance Records',
     leaves: 'Leave Application', overtime: 'Overtime Application',
     forms: 'Forms', apply: 'Apply', approve: 'Approvals',
+    initiateApply: 'New Application', myRequests: 'My Requests',
+    myDrafts: 'My Drafts', myFillTemplates: 'My Fill Templates',
     manager: 'Manager',
     infoCenter: 'Info Center', announcements: 'Announcements', orgChart: 'Org Chart',
     systemMessages: 'System Messages', loginLogs: 'Login Logs',
@@ -20,7 +22,7 @@ export default {
     visitors: 'Visitors', meetingRooms: 'Meeting Rooms',
     systemModule: 'System Admin', users: 'Accounts',
     roles: 'Roles & Permissions', orgStructure: 'Org Structure',
-    workflows: 'Workflows', auditLogs: 'Audit Logs',
+    workflows: 'Workflows', formDefinitions: 'Form Settings', auditLogs: 'Audit Logs',
     moduleSettings: 'Module Settings', systemSettings: 'Settings',
   },
 

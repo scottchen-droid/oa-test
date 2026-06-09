@@ -6,6 +6,8 @@ export default {
     attendance: '考勤管理', clock: '打卡', records: '出勤记录',
     leaves: '假期申请', overtime: '加班申请',
     forms: '电子表单', apply: '申请', approve: '签核',
+    initiateApply: '发起申请', myRequests: '我的申请',
+    myDrafts: '我的草稿', myFillTemplates: '我的填写模板',
     manager: '主管',
     infoCenter: '资讯中心', announcements: '公告', orgChart: '组织架构',
     systemMessages: '系统消息', loginLogs: '登录记录',
@@ -20,7 +22,7 @@ export default {
     visitors: '访客管理', meetingRooms: '会议室管理',
     systemModule: '系统管理员', users: '账号管理',
     roles: '角色与权限', orgStructure: '组织架构',
-    workflows: '审批流设定', auditLogs: '稽核日志',
+    workflows: '审批流设定', formDefinitions: '电子表单设置', auditLogs: '稽核日志',
     moduleSettings: '模块设定', systemSettings: '系统设定',
   },
 

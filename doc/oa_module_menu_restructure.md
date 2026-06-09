@@ -457,12 +457,17 @@
 
 ## 8.2 Menu 結構設計原則
 
-電子表單**不在側欄展開各個表單類型**，而是以 2 個固定子選單呈現：
+電子表單**不在側欄展開各個表單類型**，而是以 4 個固定子選單呈現：
 
 | 側欄項目 | 路由 | 說明 |
 |----------|------|------|
-| 申請 | `/home/forms/requests` | 頁面內以卡片格式列出所有可申請的表單類型 |
-| 簽核 | `/home/forms/approvals` | 顯示員工自己提交的表單申請審核進度 |
+| 發起申請 | `/home/forms/requests` | 頁面內以卡片格式列出目前登入者有權限申請的表單 |
+| 我的申請 | `/home/forms/approvals` | 顯示員工自己提交的表單申請審核進度，支援複製建立新申請 |
+| 我的草稿 | `/home/forms/drafts` | 查看與繼續編輯未送出的草稿，可直接從草稿送出申請 |
+| 我的填寫模板 | `/home/forms/fill-templates` | 管理常用填寫內容模板 |
+
+> **注意：** 「臨時保存」與「模板保存」按鈕已廢棄，改用「儲存草稿」與「另存為填寫模板」。
+> 「簽核」已從電子表單子選單移除，改名為「我的申請」（顯示員工自己送出的申請狀態，非審批操作）。
 
 > 新增表單類型只需在 `FormRequestsView.vue` 的 `formTypes` 陣列加入定義，無需新增路由或選單項目。
 
@@ -485,8 +490,10 @@
 ## 8.4 電子表單 Route（簡化後）
 
 ```text
-/home/forms/requests                       申請（卡片選擇 + Dialog 填寫）
-/home/forms/approvals                      簽核（我的申請審核進度）
+/home/forms/requests                       發起申請（卡片選擇 + Dialog 填寫，只顯示有權限的表單）
+/home/forms/approvals                      我的申請（已送出申請的審核進度，支援複製建立新申請）
+/home/forms/drafts                         我的草稿（未送出的草稿列表，可送出/刪除）
+/home/forms/fill-templates                 我的填寫模板（常用填寫內容管理）
 ```
 
 > 舊設計中每種表單各自一條 route（如 `/home/forms/resignation/new`）已廢棄，改為 Dialog 方式在同一頁面操作。
@@ -1570,17 +1577,31 @@ export const homeMenu: MenuItem[] = [
             children: [
               {
                 key: "home-forms-requests",
-                name: "申請",
+                name: "發起申請",
                 route: "/home/forms/requests",
                 permissionCode: "home.form.create",
-                // 頁面內以卡片呈現所有表單類型（採購申請、出差申請、OA資產申請、誤餐費、資訊需求、人力需求、離職）
+                // 只顯示目前登入者有權限申請的表單（卡片格式）
               },
               {
                 key: "home-forms-approvals",
-                name: "簽核",
+                name: "我的申請",
                 route: "/home/forms/approvals",
                 permissionCode: "home.form.view_self",
-                // 顯示員工自己提交的表單審核進度
+                // 顯示員工自己提交的表單審核進度，支援複製建立新申請
+              },
+              {
+                key: "home-forms-drafts",
+                name: "我的草稿",
+                route: "/home/forms/drafts",
+                permissionCode: "home.form.create",
+                // 查看與繼續編輯未送出的草稿
+              },
+              {
+                key: "home-forms-fill-templates",
+                name: "我的填寫模板",
+                route: "/home/forms/fill-templates",
+                permissionCode: "home.form.create",
+                // 管理個人常用填寫模板（不保存審批線）
               },
             ],
           },

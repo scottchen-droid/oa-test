@@ -19,8 +19,10 @@
 /home/attendance/records        出勤紀錄（含補卡操作入口）
 /home/attendance/leaves         假期申請
 /home/attendance/overtime       加班申請
-/home/forms/requests            電子表單申請（選擇表單類型並提交）
-/home/forms/approvals           電子表單簽核（查看自己申請的表單審核狀況）
+/home/forms/requests            發起申請（只顯示使用者有權限申請的表單）
+/home/forms/approvals           我的申請（查看自己申請的表單審核狀況）
+/home/forms/drafts              我的草稿（查看與繼續編輯未送出的草稿）
+/home/forms/fill-templates      我的填寫模板（管理常用填寫內容）
 /home/account/login-logs        登入記錄
 /home/manager/approvals         簽核（Tab 切換各類簽核，主管限）
 /home/info/announcements        公告列表
@@ -189,32 +191,60 @@ PUT  /api/overtime/requests/:id/cancel
 ## 四、電子表單（員工自助）
 
 > 電子表單使用通用 `oa_form_requests` 表儲存，欄位以 JSONB 儲存（支援未來擴充新表單類型）。
+> 草稿使用獨立 `oa_form_drafts` 表；填寫模板使用 `oa_fill_templates` 表。
 
-### 4.1 電子表單申請 `/home/forms/requests`
+### 名詞區別
+
+| 名稱 | 用途 | 對應資料表 |
+|------|------|-----------|
+| 草稿 | 尚未送出的填寫中申請 | `oa_form_drafts` |
+| 填寫模板 | 使用者保存的常用填寫內容 | `oa_fill_templates` |
+| 正式申請 | 已送出、進入審批流程的申請 | `oa_form_requests` |
+
+> **重要：** 填寫模板不保存審批線、審批人、審批快照與審批狀態。從草稿或填寫模板送出時，都必須重新驗證欄位、重新解析審批流程。
+
+---
+
+### 4.1 發起申請 `/home/forms/requests`
 **權限：** `home.forms.request.create`
 
-進入頁面後以卡片格式列出所有可申請的表單類型，點擊卡片開啟申請表單 Dialog。
+進入頁面後以卡片格式列出所有**目前登入使用者有權限申請**的表單類型，點擊卡片開啟申請表單 Dialog。
+
+> 頁面不應出現「臨時保存」或「模板保存」字樣，這兩個按鈕已廢棄。
+
+**表單填寫 Dialog 按鈕（依序）：**
+```
+儲存草稿 | 另存為填寫模板 | 送出申請
+```
 
 **目前支援的表單類型：**
 | formType | 顯示名稱 | 主要欄位 |
 |----------|----------|----------|
+| `purchase_request` | 採購申請 | 採購品項、數量、預估金額、供應商、預計交貨日期、採購原因 |
+| `business_trip` | 出差申請 | 出差目的地、開始/結束日期、出差目的、預估差旅費、是否需住宿 |
+| `expense_reimbursement` | 費用報銷 | 關聯採購/出差申請、費用明細 |
 | `asset_request` | OA資產申請單 | 資產類型、數量、預計使用日期、申請原因 |
 | `meal_allowance` | 誤餐費申請 | 加班日期、加班時數、申請金額、備註 |
 | `it_request` | 資訊需求申請 | 需求標題、需求描述、優先程度、期望完成日期 |
 | `headcount_request` | 人力需求申請 | 職位名稱、招募人數、招募原因、期望到職日期 |
 | `resignation` | 離職申請 | 預計離職日期、離職原因、交接備註 |
 
-> 未來新增表單類型時，只需在前端新增卡片定義與 Dialog 欄位，後端直接接受即可。
+**表單申請權限：** 每張表單可設定可申請對象（全體員工/指定公司/指定部門/指定角色/指定人員），發起申請頁只顯示目前登入者有權限的表單。
 
 **API**
 ```
-POST /api/forms    { formType, content: { ...欄位 } }
+POST /api/forms                              送出正式申請
+POST /api/forms/drafts                       儲存草稿
+POST /api/forms/fill-templates               另存為填寫模板
+POST /api/forms/:id/copy                     從歷史申請複製
 ```
 
-### 4.2 電子表單簽核 `/home/forms/approvals`
+---
+
+### 4.2 我的申請 `/home/forms/approvals`
 **權限：** `home.forms.approval.view_self`
 
-顯示**當前員工自己提交**的所有電子表單申請列表及其審核狀況。
+顯示**當前員工自己提交**的所有電子表單申請列表及其審核狀況。支援「從歷史申請複製建立新申請」。
 
 **列表欄位：**
 - 表單類型（標籤顯示）
@@ -222,10 +252,60 @@ POST /api/forms    { formType, content: { ...欄位 } }
 - 狀態（審核中 / 已通過 / 已駁回 / 已取消）
 - 申請時間
 - 更新時間
+- 操作：複製建立新申請
 
 **API**
 ```
 GET  /api/forms/my-requests?page=1&limit=20
+POST /api/forms/:id/copy
+```
+
+---
+
+### 4.3 我的草稿 `/home/forms/drafts`
+**權限：** `home.forms.request.create`
+
+顯示目前登入使用者尚未送出的草稿列表。
+
+**草稿特性：**
+- 尚未送出、尚未產生申請單號
+- 尚未進入審批流程，不產生審批快照
+- 可繼續編輯，可直接刪除
+- 送出時必須完整驗證欄位並重新解析審批流程
+
+**列表欄位：** 表單類型、草稿標題、建立時間、最後保存時間
+**操作：** 送出申請、刪除
+
+**API**
+```
+GET    /api/forms/drafts
+PATCH  /api/forms/drafts/:id
+DELETE /api/forms/drafts/:id
+POST   /api/forms/drafts/:id/submit
+```
+
+---
+
+### 4.4 我的填寫模板 `/home/forms/fill-templates`
+**權限：** `home.forms.request.create`
+
+管理目前登入使用者建立的填寫模板（常用填寫內容）。
+
+**填寫模板特性（不保存以下內容）：**
+- ✗ 審批線、審批人、審批快照、審批狀態
+- ✗ 申請單號、簽核紀錄、送出時間
+- ✗ 已核銷狀態、上次發票號碼、上次附件憑證
+
+**列表欄位：** 模板名稱、表單類型、模板說明、是否常用、是否啟用、最近使用時間
+**操作：** 編輯（名稱/說明/常用/啟用）、設為常用/取消常用、刪除
+
+**API**
+```
+GET    /api/forms/fill-templates?formType=
+POST   /api/forms/fill-templates
+PATCH  /api/forms/fill-templates/:id
+DELETE /api/forms/fill-templates/:id
+POST   /api/forms/fill-templates/:id/use
 ```
 
 ---
