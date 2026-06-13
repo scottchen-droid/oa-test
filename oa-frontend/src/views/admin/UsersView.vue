@@ -38,30 +38,31 @@
 
       <el-table v-loading="loading" :data="data" border stripe>
         <el-table-column prop="employeeNo" :label="$t('user.employeeNo')" width="120" />
-        <el-table-column :label="$t('user.displayName')">
+        <el-table-column :label="$t('user.displayName')" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <span>{{ row.displayName }}</span>
             <div v-if="row.nameZh" class="sub-text">{{ row.nameZh }}</div>
           </template>
         </el-table-column>
-        <el-table-column prop="email" label="Email" />
+        <el-table-column prop="email" label="Email" min-width="220" show-overflow-tooltip />
         <el-table-column :label="$t('common.status')" width="120">
           <template #default="{ row }">
             <el-tag :type="statusTagType(row.status)" size="small">{{ $t(`status.${row.status}`) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="$t('user.roles')" min-width="140">
+        <el-table-column :label="$t('user.roles')" width="170">
           <template #default="{ row }">
-            <el-tag
-              v-for="ur in row.userRoles"
-              :key="ur.role.id"
-              size="small"
-              type="info"
-              style="margin-right: 4px; margin-bottom: 2px"
-            >
-              {{ ur.role.name }}
-            </el-tag>
-            <span v-if="!row.userRoles?.length" class="text-muted">—</span>
+            <div class="single-line-tags">
+              <el-tag
+                v-for="ur in row.userRoles"
+                :key="ur.role.id"
+                size="small"
+                type="info"
+              >
+                {{ ur.role.name }}
+              </el-tag>
+              <span v-if="!row.userRoles?.length" class="text-muted">—</span>
+            </div>
           </template>
         </el-table-column>
         <el-table-column :label="$t('users.lastLogin')" width="160">
@@ -69,15 +70,17 @@
         </el-table-column>
         <el-table-column :label="$t('common.actions')" width="180" fixed="right">
           <template #default="{ row }">
-            <el-button text size="small" @click="openEdit(row)">{{ $t('common.edit') }}</el-button>
-            <el-button text size="small" @click="resetPassword(row.id)">{{ $t('users.resetPwd') }}</el-button>
-            <el-button
-              text size="small"
-              :type="row.status === 'active' ? 'danger' : 'success'"
-              @click="toggleStatus(row)"
-            >
-              {{ row.status === 'active' ? $t('common.disable') : $t('common.enable') }}
-            </el-button>
+            <div class="table-actions">
+              <el-button text size="small" @click="openEdit(row)">{{ $t('common.edit') }}</el-button>
+              <el-button text size="small" @click="resetPassword(row.id)">{{ $t('users.resetPwd') }}</el-button>
+              <el-button
+                text size="small"
+                :type="row.status === 'active' ? 'danger' : 'success'"
+                @click="toggleStatus(row)"
+              >
+                {{ row.status === 'active' ? $t('common.disable') : $t('common.enable') }}
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>

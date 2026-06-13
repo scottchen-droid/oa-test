@@ -19,7 +19,12 @@ export interface UserRole {
   id: string
   scopeType?: string
   scopeId?: string
-  role: { id: string; code: string; name: string }
+  role: {
+    id: string
+    code: string
+    name: string
+    rolePermissions?: { permission: Permission }[]
+  }
 }
 
 export interface Region {

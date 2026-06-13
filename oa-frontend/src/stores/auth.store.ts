@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { authApi } from '@/api/auth.api'
 import { usersApi } from '@/api/users.api'
 import type { User } from '@/types'
-import { setLocale, type SupportedLocale } from '@/i18n'
+import { LOCALE_STORAGE_KEY, setLocale, type SupportedLocale } from '@/i18n'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
@@ -15,6 +15,19 @@ export const useAuthStore = defineStore('auth', () => {
   const roleCodes = computed(() =>
     user.value?.userRoles?.map((ur) => ur.role.code) ?? [],
   )
+
+  const permissionCodes = computed(() => {
+    const permissions = user.value?.userRoles?.flatMap((ur) =>
+      ur.role.rolePermissions?.map((rp) => rp.permission.code) ?? [],
+    ) ?? []
+    return new Set(permissions)
+  })
+
+  function hasPermission(permissionCode?: string): boolean {
+    if (!permissionCode) return true
+    if (roleCodes.value.includes('ADMIN')) return true
+    return permissionCodes.value.has(permissionCode)
+  }
 
   // 模塊存取：以角色碼判斷，ADMIN 角色擁有所有模塊
   function hasModuleAccess(module: 'hr' | 'finance' | 'administration' | 'system'): boolean {
@@ -37,7 +50,7 @@ export const useAuthStore = defineStore('auth', () => {
   })
 
   function applyLocaleFromUser(u: User | null) {
-    if (!u) return
+    if (!u || localStorage.getItem(LOCALE_STORAGE_KEY)) return
     const primaryOrg = u.orgAssignments?.find((a: any) => a.isPrimary)
     const regionLocale = (primaryOrg?.company as any)?.region?.defaultLocale as SupportedLocale | undefined
     if (regionLocale && ['zh-TW', 'zh-CN', 'en'].includes(regionLocale)) {
@@ -97,7 +110,9 @@ export const useAuthStore = defineStore('auth', () => {
     refreshToken,
     isLoggedIn,
     roleCodes,
+    permissionCodes,
     isManager,
+    hasPermission,
     hasModuleAccess,
     login,
     logout,

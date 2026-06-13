@@ -1,8 +1,11 @@
 <template>
   <div class="announcement-section">
     <div class="section-header">
-      <span class="section-title">公告</span>
-      <router-link to="/announcements" class="more-link">查看更多 →</router-link>
+      <div>
+        <span class="section-kicker">COMPANY NEWS</span>
+        <span class="section-title">{{ t('shell.dashboard.latestAnnouncements') }}</span>
+      </div>
+      <router-link to="/announcements" class="more-link">{{ t('shell.dashboard.viewAll') }} <span>→</span></router-link>
     </div>
 
     <div v-if="loading" class="skeleton-wrap">
@@ -10,12 +13,12 @@
     </div>
 
     <div v-else-if="error" class="error-state">
-      <p>公告資料載入失敗，請稍後再試。</p>
-      <el-button size="small" @click="emit('reload')">重新載入</el-button>
+      <p>{{ t('shell.dashboard.announcementsLoadFailed') }}</p>
+      <el-button size="small" @click="emit('reload')">{{ t('shell.dashboard.reload') }}</el-button>
     </div>
 
     <div v-else-if="items.length === 0" class="empty-state">
-      <el-empty description="目前沒有公告" :image-size="60" />
+      <el-empty :description="t('shell.dashboard.noAnnouncements')" :image-size="60" />
     </div>
 
     <div v-else class="announcement-list">
@@ -25,7 +28,7 @@
         class="announcement-item"
       >
         <div class="item-header">
-          <el-tag v-if="item.isPinned" type="danger" size="small" effect="plain" class="pin-tag">置頂</el-tag>
+          <el-tag v-if="item.isPinned" type="danger" size="small" effect="plain" class="pin-tag">{{ t('shell.dashboard.pinned') }}</el-tag>
           <span class="item-title" @click="router.push(`/announcements/${item.id}`)">{{ item.title }}</span>
         </div>
         <div class="item-meta">
@@ -57,6 +60,7 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { Document } from '@element-plus/icons-vue'
 import type { AnnouncementItem } from '@/types'
 
@@ -68,33 +72,47 @@ defineProps<{
 
 const emit = defineEmits<{ (e: 'reload'): void }>()
 const router = useRouter()
+const { t, locale } = useI18n()
 
 function formatDate(d: string) {
-  return new Date(d).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
+  return new Date(d).toLocaleDateString(locale.value === 'en' ? 'en-US' : locale.value, { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 </script>
 
 <style scoped>
 .announcement-section {
-  background: #fff;
-  border-radius: 8px;
-  padding: 16px;
-  border: 1px solid #e5e7eb;
+  background: var(--oa-surface);
+  border-radius: 15px;
+  padding: 21px;
+  border: 1px solid var(--oa-border);
+  box-shadow: var(--oa-shadow);
 }
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
+}
+.section-header > div {
+  display: flex;
+  flex-direction: column;
+}
+.section-kicker {
+  margin-bottom: 3px;
+  color: var(--oa-primary);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.14em;
 }
 .section-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #111827;
+  font-size: 18px;
+  font-weight: 750;
+  color: var(--oa-navy);
 }
 .more-link {
   font-size: 12px;
-  color: #4d7cfe;
+  color: var(--oa-primary);
+  font-weight: 650;
   text-decoration: none;
 }
 .more-link:hover {
@@ -106,8 +124,13 @@ function formatDate(d: string) {
   gap: 0;
 }
 .announcement-item {
-  padding: 14px 0;
-  border-bottom: 1px solid #f3f4f6;
+  padding: 18px 10px;
+  border-bottom: 1px solid var(--oa-border);
+  border-radius: 10px;
+  transition: background 0.18s;
+}
+.announcement-item:hover {
+  background: var(--oa-surface-muted);
 }
 .announcement-item:last-child {
   border-bottom: none;
@@ -123,9 +146,9 @@ function formatDate(d: string) {
   flex-shrink: 0;
 }
 .item-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #111827;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--oa-navy);
   cursor: pointer;
   flex: 1;
   overflow: hidden;
@@ -133,7 +156,7 @@ function formatDate(d: string) {
   white-space: nowrap;
 }
 .item-title:hover {
-  color: #4d7cfe;
+  color: var(--oa-primary);
 }
 .item-meta {
   display: flex;
@@ -168,16 +191,16 @@ function formatDate(d: string) {
   gap: 4px;
   padding: 2px 8px;
   border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border: 1px solid var(--oa-border);
+  background: var(--oa-surface-muted);
   font-size: 11px;
-  color: #374151;
+  color: var(--oa-text);
   text-decoration: none;
   cursor: pointer;
 }
 .attachment-pill:hover {
-  background: #eff6ff;
-  border-color: #93c5fd;
+  background: var(--oa-primary-soft);
+  border-color: #9dcfc8;
 }
 .item-footer {
   display: flex;
@@ -190,7 +213,7 @@ function formatDate(d: string) {
 }
 .more-btn {
   font-size: 12px;
-  color: #4d7cfe;
+  color: var(--oa-primary);
   cursor: pointer;
 }
 .more-btn:hover {

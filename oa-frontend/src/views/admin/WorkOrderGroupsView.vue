@@ -293,7 +293,7 @@ async function handleSave() {
 .groups-panel {
   width: 420px;
   flex-shrink: 0;
-  background: #fff;
+  background: var(--oa-surface);
   border: 1px solid #e4e7ed;
   border-radius: 4px;
   padding: 16px;
@@ -301,7 +301,7 @@ async function handleSave() {
 
 .members-panel {
   flex: 1;
-  background: #fff;
+  background: var(--oa-surface);
   border: 1px solid #e4e7ed;
   border-radius: 4px;
   padding: 16px;

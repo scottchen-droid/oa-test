@@ -91,7 +91,7 @@ async function handleSubmit() {
 
 .auth-card {
   width: 420px;
-  background: #fff;
+  background: var(--oa-surface);
   border-radius: 12px;
   padding: 48px 40px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);

@@ -1,24 +1,73 @@
 <template>
   <div class="dashboard-wrapper">
+    <section class="welcome-panel">
+      <div class="welcome-content">
+        <div class="eyebrow">{{ formattedDate }}</div>
+        <h1>{{ greeting }}，{{ displayName }}</h1>
+        <p>{{ t('shell.dashboard.intro') }}</p>
+        <div class="welcome-actions">
+          <router-link to="/home/forms/requests" class="primary-action">
+            <el-icon><EditPen /></el-icon>
+            {{ t('nav.initiateApply') }}
+          </router-link>
+          <router-link to="/home/manager/approvals" class="secondary-action">
+            {{ t('shell.dashboard.viewApprovals') }}
+            <el-icon><ArrowRight /></el-icon>
+          </router-link>
+        </div>
+      </div>
+      <div class="welcome-summary">
+        <div class="summary-item">
+          <span class="summary-icon summary-icon--amber"><Bell /></span>
+          <span class="summary-copy">
+            <strong>{{ pendingReminderCount }}</strong>
+            <small>{{ t('shell.dashboard.todayReminders') }}</small>
+          </span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-icon summary-icon--teal"><DocumentChecked /></span>
+          <span class="summary-copy">
+            <strong>{{ unreadAnnouncementCount }}</strong>
+            <small>{{ t('shell.dashboard.unreadAnnouncements') }}</small>
+          </span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-icon summary-icon--blue"><Calendar /></span>
+          <span class="summary-copy">
+            <strong>{{ tomorrowReminderCount }}</strong>
+            <small>{{ t('shell.dashboard.tomorrowSchedule') }}</small>
+          </span>
+        </div>
+      </div>
+      <div class="welcome-decoration welcome-decoration--one"></div>
+      <div class="welcome-decoration welcome-decoration--two"></div>
+    </section>
+
     <div class="dashboard-layout">
       <!-- Left sidebar -->
       <aside class="dash-left">
+        <div class="panel-heading">
+          <div>
+            <span class="panel-kicker">WORKSPACE</span>
+            <h2>{{ t('shell.dashboard.workspace') }}</h2>
+          </div>
+        </div>
         <ShortcutGrid :items="data?.shortcuts ?? mockShortcuts" @click="handleShortcutClick" />
 
         <ReminderCard
-          title="今日提醒"
+          :title="t('shell.dashboard.todayReminders')"
           :items="data?.todayReminders ?? []"
           :loading="loading"
         />
 
         <ReminderCard
-          title="明日提醒"
+          :title="t('shell.dashboard.tomorrowReminders')"
           :items="data?.tomorrowReminders ?? []"
           :loading="loading"
         />
 
         <div v-if="recentFunctions.length > 0" class="recent-section">
-          <div class="section-title">最近使用</div>
+          <div class="section-title">{{ t('shell.dashboard.recent') }}</div>
           <div class="recent-list">
             <router-link
               v-for="fn in recentFunctions"
@@ -55,7 +104,7 @@
           />
         </div>
         <div v-else class="placeholder-tab">
-          <el-empty description="功能建置中，敬請期待" :image-size="80" />
+          <el-empty :description="t('shell.dashboard.comingSoon')" :image-size="80" />
         </div>
       </main>
 
@@ -76,9 +125,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useUiStore } from '@/stores/ui.store'
+import { useAuthStore } from '@/stores/auth.store'
 import { dashboardApi } from '@/api/dashboard.api'
 import type { DashboardData, ShortcutItem, AnnouncementItem, RecentFunctionItem } from '@/types'
+import { ArrowRight, Bell, Calendar, DocumentChecked, EditPen } from '@element-plus/icons-vue'
 
 import ShortcutGrid from '@/views/dashboard/components/ShortcutGrid.vue'
 import ReminderCard from '@/views/dashboard/components/ReminderCard.vue'
@@ -88,18 +140,46 @@ import AssistantCard from '@/views/dashboard/components/AssistantCard.vue'
 import FloatingHelpButton from '@/views/dashboard/components/FloatingHelpButton.vue'
 
 const ui = useUiStore()
+const auth = useAuthStore()
+const { t, locale } = useI18n()
 
 const data = ref<DashboardData | null>(null)
 const loading = ref(true)
 const hasError = ref(false)
 const activeTab = ref('overview')
 
-const tabs = [
-  { key: 'overview', label: '總覽' },
-  { key: 'personal', label: '個人' },
-  { key: 'manager', label: '主管' },
-  { key: 'info', label: '資訊中心' },
-]
+const displayName = computed(() =>
+  data.value?.currentUser?.chineseName || auth.user?.displayName || t('shell.dashboard.partner'),
+)
+
+const greeting = computed(() => {
+  const hour = new Date().getHours()
+  if (hour < 11) return t('shell.dashboard.morning')
+  if (hour < 18) return t('shell.dashboard.afternoon')
+  return t('shell.dashboard.evening')
+})
+
+const formattedDate = computed(() =>
+  new Intl.DateTimeFormat(locale.value === 'en' ? 'en-US' : locale.value, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long',
+  }).format(new Date()),
+)
+
+const pendingReminderCount = computed(() => data.value?.todayReminders?.length ?? 0)
+const tomorrowReminderCount = computed(() => data.value?.tomorrowReminders?.length ?? 0)
+const unreadAnnouncementCount = computed(() =>
+  (data.value?.announcements ?? mockAnnouncements).filter((item) => item.readStatus === 'unread').length,
+)
+
+const tabs = computed(() => [
+  { key: 'overview', label: t('shell.dashboard.overview') },
+  { key: 'personal', label: t('shell.dashboard.personal') },
+  { key: 'manager', label: t('shell.dashboard.manager') },
+  { key: 'info', label: t('nav.infoCenter') },
+])
 
 const RECENT_KEY = 'oa_recent_functions'
 
@@ -112,13 +192,13 @@ const recentFunctions = computed<RecentFunctionItem[]>(() => {
   }
 })
 
-const mockShortcuts: ShortcutItem[] = [
-  { id: 'notifications', name: '通知', icon: 'Bell', route: '/home/personal/notifications', badgeCount: 0 },
-  { id: 'approvals', name: '簽核', icon: 'Check', route: '/home/manager/leave-approvals', badgeCount: 0 },
-  { id: 'leaves', name: '請假', icon: 'Calendar', route: '/home/attendance/leaves', badgeCount: 0 },
-  { id: 'announcements', name: '公告', icon: 'Notification', route: '/home/info/announcements', badgeCount: 0 },
-  { id: 'attendance', name: '考勤', icon: 'Clock', route: '/home/attendance/records', badgeCount: 0 },
-]
+const mockShortcuts = computed<ShortcutItem[]>(() => [
+  { id: 'notifications', name: t('shell.dashboard.shortcuts.notifications'), icon: 'Bell', route: '/home/personal/notifications', badgeCount: 0 },
+  { id: 'approvals', name: t('shell.dashboard.shortcuts.approvals'), icon: 'Check', route: '/home/manager/leave-approvals', badgeCount: 0 },
+  { id: 'leaves', name: t('shell.dashboard.shortcuts.leave'), icon: 'Calendar', route: '/home/attendance/leaves', badgeCount: 0 },
+  { id: 'announcements', name: t('shell.dashboard.shortcuts.announcements'), icon: 'Notification', route: '/home/info/announcements', badgeCount: 0 },
+  { id: 'attendance', name: t('shell.dashboard.shortcuts.attendance'), icon: 'Clock', route: '/home/attendance/records', badgeCount: 0 },
+])
 
 const mockAnnouncements: AnnouncementItem[] = [
   {
@@ -189,7 +269,7 @@ function handleShortcutClick(item: ShortcutItem) {
 }
 
 onMounted(() => {
-  ui.setBreadcrumbs([{ title: '首頁' }])
+  ui.setBreadcrumbs([{ title: t('nav.home') }])
   loadDashboard()
 })
 </script>
@@ -197,12 +277,175 @@ onMounted(() => {
 <style scoped>
 .dashboard-wrapper {
   height: 100%;
+  max-width: 1680px;
+  margin: 0 auto;
+}
+
+.welcome-panel {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  min-height: 220px;
+  margin-bottom: 22px;
+  padding: 34px 38px;
+  overflow: hidden;
+  color: #fff;
+  background:
+    linear-gradient(105deg, rgba(12, 76, 74, 0.98), rgba(15, 118, 110, 0.92)),
+    #0f766e;
+  border-radius: 20px;
+  box-shadow: 0 18px 40px rgba(12, 79, 74, 0.18);
+}
+
+.welcome-content {
+  position: relative;
+  z-index: 2;
+}
+
+.eyebrow {
+  margin-bottom: 10px;
+  color: #a9ded6;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+}
+
+.welcome-panel h1 {
+  margin: 0 0 9px;
+  font-size: clamp(27px, 3vw, 38px);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+}
+
+.welcome-panel p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 14px;
+}
+
+.welcome-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 25px;
+}
+
+.primary-action,
+.secondary-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 39px;
+  padding: 0 15px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.primary-action {
+  color: #11423f;
+  background: #fff;
+  box-shadow: 0 7px 18px rgba(4, 51, 48, 0.18);
+}
+
+.secondary-action {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.primary-action:hover,
+.secondary-action:hover {
+  transform: translateY(-2px);
+}
+
+.secondary-action:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.welcome-summary {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(100px, 1fr));
+  align-self: center;
+  min-width: 410px;
+  padding: 18px 12px;
+  background: rgba(8, 54, 53, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 7px 13px;
+  border-right: 1px solid rgba(255, 255, 255, 0.13);
+}
+
+.summary-item:last-child {
+  border-right: 0;
+}
+
+.summary-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+}
+
+.summary-icon--amber { color: #ffdb8d; background: rgba(245, 158, 11, 0.16); }
+.summary-icon--teal { color: #b8fff3; background: rgba(80, 220, 198, 0.14); }
+.summary-icon--blue { color: #c6e0ff; background: rgba(96, 165, 250, 0.15); }
+
+.summary-copy {
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-copy strong {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.summary-copy small {
+  margin-top: 5px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.welcome-decoration {
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+}
+
+.welcome-decoration--one {
+  top: -140px;
+  right: 23%;
+  width: 300px;
+  height: 300px;
+}
+
+.welcome-decoration--two {
+  right: -70px;
+  bottom: -140px;
+  width: 280px;
+  height: 280px;
 }
 
 .dashboard-layout {
   display: grid;
-  grid-template-columns: 240px 1fr 300px;
-  gap: 16px;
+  grid-template-columns: 250px minmax(380px, 1fr) 292px;
+  gap: 18px;
   align-items: start;
 }
 
@@ -210,32 +453,54 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0;
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  padding: 16px;
+  background: var(--oa-surface);
+  border-radius: 15px;
+  border: 1px solid var(--oa-border);
+  padding: 18px;
+  box-shadow: var(--oa-shadow);
 }
 
 .dash-main {
   min-width: 0;
 }
 
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 17px;
+}
+
+.panel-heading h2 {
+  margin: 2px 0 0;
+  color: var(--oa-navy);
+  font-size: 17px;
+}
+
+.panel-kicker {
+  color: var(--oa-primary);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+}
+
 .main-tabs {
   display: flex;
   gap: 4px;
-  margin-bottom: 12px;
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  margin-bottom: 14px;
+  background: var(--oa-surface);
+  border-radius: 13px;
+  border: 1px solid var(--oa-border);
   padding: 6px;
+  box-shadow: 0 6px 20px rgba(25, 55, 72, 0.05);
 }
 
 .tab-btn {
-  padding: 6px 14px;
-  border-radius: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--oa-text-secondary);
   background: none;
   border: none;
   cursor: pointer;
@@ -243,13 +508,14 @@ onMounted(() => {
 }
 
 .tab-btn:hover {
-  color: #374151;
-  background: #f3f4f6;
+  color: var(--oa-text);
+  background: var(--oa-surface-muted);
 }
 
 .tab-btn.active {
-  color: #4d7cfe;
-  background: #eff3ff;
+  color: #fff;
+  background: var(--oa-primary);
+  box-shadow: 0 4px 10px rgba(15, 118, 110, 0.18);
 }
 
 .dash-right {
@@ -268,9 +534,9 @@ onMounted(() => {
 }
 
 .recent-section {
-  margin-top: 4px;
-  padding-top: 12px;
-  border-top: 1px solid #f3f4f6;
+  margin-top: 5px;
+  padding-top: 15px;
+  border-top: 1px solid var(--oa-border);
 }
 
 .recent-list {
@@ -281,26 +547,36 @@ onMounted(() => {
 
 .recent-item {
   font-size: 12px;
-  color: #374151;
-  padding: 4px 6px;
-  border-radius: 4px;
+  color: var(--oa-text);
+  padding: 7px 9px;
+  border-radius: 7px;
   text-decoration: none;
   transition: background 0.1s;
 }
 
 .recent-item:hover {
-  background: #f3f4f6;
-  color: #4d7cfe;
+  background: var(--oa-primary-soft);
+  color: var(--oa-primary);
 }
 
 .placeholder-tab {
-  background: #fff;
+  background: var(--oa-surface);
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--oa-border);
   padding: 40px 20px;
 }
 
 @media (max-width: 1199px) {
+  .welcome-panel {
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  .welcome-summary {
+    align-self: stretch;
+    min-width: 0;
+  }
+
   .dashboard-layout {
     grid-template-columns: 220px 1fr;
   }
@@ -312,6 +588,24 @@ onMounted(() => {
 }
 
 @media (max-width: 767px) {
+  .welcome-panel {
+    padding: 27px 22px;
+  }
+
+  .welcome-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-item {
+    justify-content: flex-start;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .summary-item:last-child {
+    border-bottom: 0;
+  }
+
   .dashboard-layout {
     grid-template-columns: 1fr;
   }

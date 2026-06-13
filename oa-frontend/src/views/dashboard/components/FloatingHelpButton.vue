@@ -3,13 +3,16 @@
     <transition name="fade">
       <div v-if="open" class="help-popup">
         <div class="popup-header">
-          <span>OA 小助手</span>
+          <span>{{ t('shell.dashboard.assistantTitle') }}</span>
           <button class="close-btn" @click="open = false">×</button>
         </div>
-        <p class="popup-text">Hi，我是 OA 小助手！<br>有任何 OA 系統問題都可以問我，<br>我會協助你找到相關說明。</p>
+        <p class="popup-text">
+          {{ t('shell.dashboard.assistantGreeting') }}<br>
+          {{ t('shell.dashboard.assistantHelp') }}
+        </p>
         <div class="popup-actions">
-          <el-button size="small" plain>前往 FAQ</el-button>
-          <el-button size="small" type="primary">聯繫資訊部</el-button>
+          <el-button size="small" plain>{{ t('shell.dashboard.goToFaq') }}</el-button>
+          <el-button size="small" type="primary">{{ t('shell.dashboard.contactIt') }}</el-button>
         </div>
       </div>
     </transition>
@@ -21,8 +24,10 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { QuestionFilled } from '@element-plus/icons-vue'
 const open = ref(false)
+const { t } = useI18n()
 </script>
 
 <style scoped>
@@ -40,25 +45,25 @@ const open = ref(false)
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: #4d7cfe;
+  background: var(--oa-primary);
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(77,124,254,0.4);
+  box-shadow: 0 7px 18px rgba(15, 118, 110, 0.32);
   transition: transform 0.2s;
 }
 .help-btn:hover {
   transform: scale(1.08);
 }
 .help-popup {
-  background: #fff;
+  background: var(--oa-surface);
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.12);
   padding: 16px;
   width: 240px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--oa-border);
 }
 .popup-header {
   display: flex;
@@ -66,7 +71,7 @@ const open = ref(false)
   align-items: center;
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--oa-text);
   margin-bottom: 10px;
 }
 .close-btn {
@@ -94,5 +99,17 @@ const open = ref(false)
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
   transform: translateY(8px);
+}
+
+@media (max-width: 767px) {
+  .floating-help {
+    right: 14px;
+    bottom: 82px;
+  }
+
+  .help-btn {
+    width: 44px;
+    height: 44px;
+  }
 }
 </style>

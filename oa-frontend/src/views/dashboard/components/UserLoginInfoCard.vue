@@ -1,7 +1,7 @@
 <template>
   <div class="login-info-card">
     <div class="card-header">
-      <span class="card-title">登入資訊</span>
+      <span class="card-title">{{ t('shell.dashboard.loginInfo') }}</span>
       <el-button
         type="danger"
         text
@@ -9,7 +9,7 @@
         :loading="loggingOut"
         @click="handleLogout"
       >
-        登出
+        {{ t('auth.logout') }}
       </el-button>
     </div>
 
@@ -27,23 +27,23 @@
 
       <div class="info-rows">
         <div class="info-row">
-          <span class="info-label">公司名稱</span>
+          <span class="info-label">{{ t('shell.dashboard.companyName') }}</span>
           <span class="info-value">{{ user.companyName || '—' }}</span>
         </div>
         <div v-if="user.companyCode" class="info-row">
-          <span class="info-label">公司代碼</span>
+          <span class="info-label">{{ t('shell.dashboard.companyCode') }}</span>
           <span class="info-value">{{ user.companyCode }}</span>
         </div>
         <div v-if="user.employeeNo" class="info-row">
-          <span class="info-label">員工編號</span>
+          <span class="info-label">{{ t('shell.dashboard.employeeNo') }}</span>
           <span class="info-value">{{ user.employeeNo }}</span>
         </div>
         <div v-if="user.departmentName" class="info-row">
-          <span class="info-label">部門</span>
+          <span class="info-label">{{ t('shell.dashboard.department') }}</span>
           <span class="info-value">{{ user.departmentName }}<span v-if="user.positionName"> [{{ user.positionName }}]</span></span>
         </div>
         <div v-if="user.roleName" class="info-row">
-          <span class="info-label">系統角色</span>
+          <span class="info-label">{{ t('shell.dashboard.systemRole') }}</span>
           <span class="info-value">{{ user.roleName }}</span>
         </div>
       </div>
@@ -53,6 +53,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.store'
@@ -65,14 +66,15 @@ const props = defineProps<{
 
 const auth = useAuthStore()
 const router = useRouter()
+const { t } = useI18n()
 const loggingOut = ref(false)
 
 const initial = computed(() => props.user?.chineseName?.[0] ?? 'U')
 
 async function handleLogout() {
-  await ElMessageBox.confirm('確定要登出系統嗎？', '確認登出', {
-    confirmButtonText: '確定登出',
-    cancelButtonText: '取消',
+  await ElMessageBox.confirm(t('msg.confirmLogout'), t('common.confirm'), {
+    confirmButtonText: t('auth.logout'),
+    cancelButtonText: t('common.cancel'),
     type: 'warning',
   })
   loggingOut.value = true
@@ -87,10 +89,11 @@ async function handleLogout() {
 
 <style scoped>
 .login-info-card {
-  background: #fff;
-  border-radius: 8px;
-  padding: 16px;
-  border: 1px solid #e5e7eb;
+  background: var(--oa-surface);
+  border-radius: 15px;
+  padding: 19px;
+  border: 1px solid var(--oa-border);
+  box-shadow: var(--oa-shadow);
 }
 .card-header {
   display: flex;
@@ -99,9 +102,9 @@ async function handleLogout() {
   margin-bottom: 12px;
 }
 .card-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #111827;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--oa-navy);
 }
 .user-name-row {
   display: flex;
@@ -112,14 +115,15 @@ async function handleLogout() {
   border-bottom: 1px solid #f3f4f6;
 }
 .avatar {
-  background-color: #4d7cfe;
+  background: linear-gradient(145deg, #168e84, #0c625c);
   color: #fff;
   flex-shrink: 0;
+  box-shadow: 0 5px 12px rgba(15, 118, 110, 0.2);
 }
 .user-name {
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--oa-text);
 }
 .name-en {
   font-weight: 400;
@@ -137,9 +141,15 @@ async function handleLogout() {
   gap: 8px;
 }
 .info-row {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  gap: 8px;
+  align-items: baseline;
+  padding: 7px 0;
+  border-bottom: 1px dashed var(--oa-border);
+}
+.info-row:last-child {
+  border-bottom: 0;
 }
 .info-label {
   font-size: 11px;
@@ -149,7 +159,7 @@ async function handleLogout() {
 }
 .info-value {
   font-size: 13px;
-  color: #374151;
+  color: var(--oa-text);
   font-weight: 500;
 }
 .skeleton-wrap {

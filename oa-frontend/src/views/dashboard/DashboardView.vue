@@ -215,7 +215,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0;
-  background: #fff;
+  background: var(--oa-surface);
   border-radius: 8px;
   border: 1px solid #e5e7eb;
   padding: 16px;
@@ -230,7 +230,7 @@ onMounted(() => {
   display: flex;
   gap: 4px;
   margin-bottom: 12px;
-  background: #fff;
+  background: var(--oa-surface);
   border-radius: 8px;
   border: 1px solid #e5e7eb;
   padding: 6px;
@@ -302,7 +302,7 @@ onMounted(() => {
 }
 
 .placeholder-tab {
-  background: #fff;
+  background: var(--oa-surface);
   border-radius: 8px;
   border: 1px solid #e5e7eb;
   padding: 40px 20px;

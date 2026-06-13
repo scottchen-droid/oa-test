@@ -5,7 +5,7 @@
       <el-skeleton :rows="2" animated />
     </div>
     <template v-else>
-      <div v-if="items.length === 0" class="empty-text">無提醒事項</div>
+      <div v-if="items.length === 0" class="empty-text">{{ t('shell.dashboard.noReminders') }}</div>
       <div v-else class="reminder-list">
         <div
           v-for="item in items"
@@ -24,6 +24,7 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import type { ReminderItem } from '@/types'
 
 const props = defineProps<{
@@ -33,6 +34,7 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
+const { t } = useI18n()
 
 function navigate(item: ReminderItem) {
   if (item.route) router.push(item.route)
@@ -45,11 +47,9 @@ function navigate(item: ReminderItem) {
 }
 .section-title {
   font-size: 12px;
-  color: #9ca3af;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 8px;
-  font-weight: 600;
+  color: #405967;
+  margin-bottom: 9px;
+  font-weight: 700;
 }
 .reminder-list {
   display: flex;
@@ -60,23 +60,24 @@ function navigate(item: ReminderItem) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 8px;
-  border-radius: 6px;
-  background: #f8fafc;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: var(--oa-surface-muted);
   font-size: 12px;
-  color: #374151;
+  color: var(--oa-text);
   cursor: pointer;
   border-left: 3px solid transparent;
-  transition: background 0.15s;
+  transition: background 0.15s, transform 0.15s;
 }
 .reminder-item:hover {
-  background: #eff6ff;
+  transform: translateX(2px);
+  background: #edf7f5;
 }
 .priority-high {
   border-left-color: #ef4444;
 }
 .priority-normal {
-  border-left-color: #f59e0b;
+  border-left-color: var(--oa-accent);
 }
 .priority-low {
   border-left-color: #10b981;

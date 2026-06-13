@@ -683,5 +683,5 @@ async function submitForm() {
 
 .upload-tip { font-size: 12px; color: #909399; margin-top: 4px; }
 
-.bottom-actions { position: sticky; bottom: 0; background: white; border-top: 1px solid #ebeef5; padding: 16px 0; display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; }
+.bottom-actions { position: sticky; bottom: 0; background: var(--oa-surface); border-top: 1px solid var(--oa-border); padding: 16px 0; display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; }
 </style>
